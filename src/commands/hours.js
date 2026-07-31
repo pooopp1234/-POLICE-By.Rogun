@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const db = require("../utils/db");
 const time = require("../utils/time");
 const embeds = require("../utils/embeds");
@@ -7,7 +7,7 @@ module.exports = {
   data: new SlashCommandBuilder().setName("ชั่วโมง").setDescription("ดูชั่วโมงเข้าเวรของตัวเอง"),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const member = await db.findMember(interaction.user.id);
     if (!member) {

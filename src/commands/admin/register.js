@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const db = require("../../utils/db");
 const time = require("../../utils/time");
 const embeds = require("../../utils/embeds");
@@ -32,11 +32,11 @@ module.exports = {
     if (!isAdmin(interaction)) {
       return interaction.reply({
         embeds: [embeds.errorEmbed("คำสั่งนี้ใช้ได้เฉพาะแอดมินเท่านั้น")],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const discordId = interaction.options.getString("ไอดีดิสคอร์ด").trim();
     const gameName = interaction.options.getString("ชื่อ");

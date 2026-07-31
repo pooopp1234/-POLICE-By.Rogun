@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const { sendLog } = require("../utils/permissions");
 const dutyActions = require("../utils/dutyActions");
 const panel = require("../utils/panel");
@@ -8,7 +8,7 @@ module.exports = {
   data: new SlashCommandBuilder().setName("ออกเวร").setDescription("สิ้นสุดการเข้าเวร"),
 
   async execute(interaction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const result = await dutyActions.checkOut(interaction.user);
 

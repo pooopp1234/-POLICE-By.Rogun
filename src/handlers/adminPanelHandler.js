@@ -1,14 +1,5 @@
 const dayjs = require("dayjs");
-const {
-  ActionRowBuilder,
-  ButtonStyle,
-  UserSelectMenuBuilder,
-  StringSelectMenuBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  AttachmentBuilder,
-} = require("discord.js");
+const { ActionRowBuilder, ButtonStyle, UserSelectMenuBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder, MessageFlags } = require("discord.js");
 const db = require("../utils/db");
 const time = require("../utils/time");
 const embeds = require("../utils/embeds");
@@ -101,7 +92,7 @@ async function handleSummary(interaction) {
 }
 
 async function handleExport(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const { members, dutyLog, summary } = db.exportAllCsv();
   const files = [
     new AttachmentBuilder(Buffer.from(members, "utf-8"), { name: "members.csv" }),
@@ -115,7 +106,7 @@ async function handleExport(interaction) {
 }
 
 async function handlePostDutyPanel(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   await panel.postPanel(interaction.channel);
   await interaction.editReply({
     embeds: [embeds.successEmbed("โพสต์แผงเข้าเวรในห้องนี้เรียบร้อยแล้ว")],
@@ -123,7 +114,7 @@ async function handlePostDutyPanel(interaction) {
 }
 
 async function handlePostRoster(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   try {
     await roster.postRoster(interaction.channel);
   } catch (err) {
@@ -148,7 +139,7 @@ async function handleAskUser(interaction, buttonId) {
   await interaction.reply({
     content: "เลือกสมาชิกจากเมนูด้านล่าง:",
     components: [userSelectRow(meta.customId, meta.placeholder)],
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
 
@@ -373,7 +364,7 @@ async function handleStringSelect(interaction) {
 // ---------- Modal submit ----------
 
 async function handleModalAddHours(interaction, targetId) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const amount = parseFloat(interaction.fields.getTextInputValue("hours"));
   const reason = interaction.fields.getTextInputValue("reason");
@@ -404,7 +395,7 @@ async function handleModalAddHours(interaction, targetId) {
 }
 
 async function handleModalSubHours(interaction, targetId) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const amount = parseFloat(interaction.fields.getTextInputValue("hours"));
   const reason = interaction.fields.getTextInputValue("reason");
@@ -435,7 +426,7 @@ async function handleModalSubHours(interaction, targetId) {
 }
 
 async function handleModalEditTime(interaction, targetId) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const dateStr = interaction.fields.getTextInputValue("date").trim();
   const checkInStr = interaction.fields.getTextInputValue("checkIn").trim();
@@ -485,7 +476,7 @@ async function handleModalEditTime(interaction, targetId) {
 }
 
 async function handleModalRegister(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const discordId = interaction.fields.getTextInputValue("discordId").trim();
   const gameName = interaction.fields.getTextInputValue("gameName").trim();
@@ -517,7 +508,7 @@ async function handleModalRegister(interaction) {
 }
 
 async function handleModalSetPosition(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   const discordId = interaction.fields.getTextInputValue("discordId").trim();
 

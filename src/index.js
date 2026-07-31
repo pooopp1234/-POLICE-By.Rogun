@@ -1,7 +1,7 @@
 require("dotenv").config();
 const fs = require("fs");
 const path = require("path");
-const { Client, GatewayIntentBits, Collection } = require("discord.js");
+const { Client, GatewayIntentBits, Collection, MessageFlags } = require("discord.js");
 const embeds = require("./utils/embeds");
 const dutyActions = require("./utils/dutyActions");
 const panel = require("./utils/panel");
@@ -51,7 +51,7 @@ client.on("interactionCreate", async (interaction) => {
       if (interaction.deferred || interaction.replied) {
         await interaction.editReply(errorReply).catch(() => {});
       } else {
-        await interaction.reply({ ...errorReply, ephemeral: true }).catch(() => {});
+        await interaction.reply({ ...errorReply, flags: MessageFlags.Ephemeral }).catch(() => {});
       }
     }
     return;
@@ -60,7 +60,7 @@ client.on("interactionCreate", async (interaction) => {
   if (interaction.isButton()) {
     if (interaction.customId === "duty_checkin" || interaction.customId === "duty_checkout") {
       try {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const result =
           interaction.customId === "duty_checkin"
@@ -84,7 +84,7 @@ client.on("interactionCreate", async (interaction) => {
         if (interaction.deferred || interaction.replied) {
           await interaction.editReply(errorReply).catch(() => {});
         } else {
-          await interaction.reply({ ...errorReply, ephemeral: true }).catch(() => {});
+          await interaction.reply({ ...errorReply, flags: MessageFlags.Ephemeral }).catch(() => {});
         }
       }
       return;
@@ -137,7 +137,7 @@ async function safeErrorReply(interaction) {
   if (interaction.deferred || interaction.replied) {
     await interaction.editReply(errorReply).catch(() => {});
   } else {
-    await interaction.reply({ ...errorReply, ephemeral: true }).catch(() => {});
+    await interaction.reply({ ...errorReply, flags: MessageFlags.Ephemeral }).catch(() => {});
   }
 }
 

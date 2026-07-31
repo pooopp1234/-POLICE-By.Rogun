@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ChannelType } = require("discord.js");
+const { SlashCommandBuilder, ChannelType, MessageFlags } = require("discord.js");
 const embeds = require("../../utils/embeds");
 const adminPanel = require("../../utils/adminPanel");
 const { isAdmin } = require("../../utils/permissions");
@@ -22,11 +22,11 @@ module.exports = {
     if (!isAdmin(interaction)) {
       return interaction.reply({
         embeds: [embeds.errorEmbed("คำสั่งนี้สำหรับแอดมินเท่านั้น")],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const targetChannel = interaction.options.getChannel("ห้อง") || interaction.channel;
     await targetChannel.send({

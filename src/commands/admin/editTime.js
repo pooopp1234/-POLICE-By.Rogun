@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require("discord.js");
+const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const dayjs = require("dayjs");
 const db = require("../../utils/db");
 const time = require("../../utils/time");
@@ -25,11 +25,11 @@ module.exports = {
     if (!isAdmin(interaction)) {
       return interaction.reply({
         embeds: [embeds.errorEmbed("คำสั่งนี้ใช้ได้เฉพาะแอดมินเท่านั้น")],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const target = interaction.options.getUser("สมาชิก");
     const dateStr = interaction.options.getString("วันที่");
