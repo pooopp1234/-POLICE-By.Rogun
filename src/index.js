@@ -141,4 +141,14 @@ async function safeErrorReply(interaction) {
   }
 }
 
+// เปิด HTTP server เล็กๆ เพื่อให้ Render มองเห็นพอร์ตเปิดอยู่ (จำเป็นสำหรับ Web Service)
+const http = require("node:http");
+const PORT = process.env.PORT || 3000;
+http
+  .createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("Duty bot is running.");
+  })
+  .listen(PORT, () => console.log(`HTTP keep-alive server listening on port ${PORT}`));
+
 client.login(process.env.DISCORD_TOKEN);
