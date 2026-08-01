@@ -5,6 +5,7 @@ const time = require("../utils/time");
 const embeds = require("../utils/embeds");
 const roster = require("../utils/roster");
 const panel = require("../utils/panel");
+const weeklyReset = require("../utils/weeklyReset");
 const config = require("../../config.json");
 const { sendLog } = require("../utils/permissions");
 
@@ -126,6 +127,46 @@ async function handlePostRoster(interaction) {
   await interaction.editReply({ embeds: [embeds.successEmbed("โพสต์รายชื่อในห้องนี้เรียบร้อยแล้ว")] });
 }
 
+async function handleRunWeekly(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const { weekKey, rows, embed } = await weeklyReset.runNow(interaction.client);
+  await interaction.editReply({
+    embeds: [
+      embeds.successEmbed(
+        `สั่งสรุปสัปดาห์ ${weekKey} ทันทีเรียบร้อยแล้ว (${rows.length} คนมีข้อมูล) — บันทึกลงประวัติแล้ว`
+      ),
+      embed,
+    ],
+  });
+}
+
+async function handleWeeklyHistoryList(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  const weeks = await db.listWeeklyHistoryWeeks(25);
+
+  if (weeks.length === 0) {
+    return interaction.editReply({
+      embeds: [embeds.adminActionEmbed("📜 ประวัติสัปดาห์ก่อนหน้า", "ยังไม่มีประวัติที่บันทึกไว้")],
+    });
+  }
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId("ap_select_weeklyhistory")
+    .setPlaceholder("เลือกสัปดาห์ที่ต้องการดู")
+    .addOptions(
+      weeks.map((w) => ({
+        label: w.weekKey,
+        description: `${w.totalHours} ชม. รวม / ${w.memberCount} คน`,
+        value: w.weekKey,
+      }))
+    );
+
+  await interaction.editReply({
+    content: "เลือกสัปดาห์ที่ต้องการดูรายละเอียด:",
+    components: [new ActionRowBuilder().addComponents(select)],
+  });
+}
+
 // ---------- ปุ่ม: ต้องเลือกสมาชิกก่อน (เปิด user select menu) ----------
 
 const USER_SELECT_META = {
@@ -214,6 +255,8 @@ async function handleButton(interaction) {
   if (id === "ap_removemember") return interaction.showModal(removeMemberModal());
   if (id.startsWith("ap_removemember_confirm:")) return handleRemoveMemberConfirm(interaction, id.split(":")[1]);
   if (id === "ap_removemember_cancel") return handleRemoveMemberCancel(interaction);
+  if (id === "ap_runweekly") return handleRunWeekly(interaction);
+  if (id === "ap_weeklyhistory") return handleWeeklyHistoryList(interaction);
 }
 
 // ---------- User select menu (ขั้นตอนที่ 2 ของ เพิ่ม/ลดชั่วโมง, แก้เวลา, ล้างสถานะเวร) ----------
@@ -384,10 +427,35 @@ async function handleSelectSetPosition(interaction) {
   );
 }
 
+async function handleSelectWeeklyHistory(interaction) {
+  const weekKey = interaction.values[0];
+  await interaction.deferUpdate();
+
+  const rows = await db.getWeeklyHistory(weekKey);
+  if (rows.length === 0) {
+    return interaction.editReply({
+      content: null,
+      embeds: [embeds.errorEmbed(`ไม่พบข้อมูลของสัปดาห์ ${weekKey}`)],
+      components: [],
+    });
+  }
+
+  const fields = rows.slice(0, 25).map((r) => ({
+    name: r.name,
+    value: `${r.hoursWeek} ชม. (${r.dutyCount} ครั้ง)`,
+    inline: true,
+  }));
+
+  const embed = embeds.adminActionEmbed(`📜 สรุปสัปดาห์ ${weekKey}`, `รวม ${rows.length} คนที่มีข้อมูลในสัปดาห์นี้`, fields);
+
+  await interaction.editReply({ content: null, embeds: [embed], components: [] });
+}
+
 async function handleStringSelect(interaction) {
   const id = interaction.customId;
   if (id === "ap_select_regposition") return handleSelectRegPosition(interaction);
   if (id === "ap_select_setposition") return handleSelectSetPosition(interaction);
+  if (id === "ap_select_weeklyhistory") return handleSelectWeeklyHistory(interaction);
 }
 
 // ---------- Modal submit ----------

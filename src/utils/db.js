@@ -61,6 +61,15 @@ const SCHEMA_STATEMENTS = [
     key TEXT PRIMARY KEY,
     value TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS weekly_summary_history (
+    week_key TEXT,
+    discord_id TEXT,
+    name TEXT,
+    hours_week REAL,
+    duty_count INTEGER,
+    updated_at TEXT,
+    PRIMARY KEY (week_key, discord_id)
+  )`,
 ];
 
 const ready = (async () => {
@@ -369,6 +378,69 @@ async function setState(key, value) {
   });
 }
 
+// ---------- Weekly Summary History (เก็บสรุปชั่วโมงเวรแยกตามสัปดาห์ ดูย้อนหลังได้) ----------
+
+function rowToWeeklyHistory(row) {
+  return {
+    weekKey: row.week_key,
+    discordId: row.discord_id,
+    name: row.name,
+    hoursWeek: row.hours_week,
+    dutyCount: row.duty_count,
+    updatedAt: row.updated_at,
+  };
+}
+
+/**
+ * บันทึก/อัปเดตสรุปของสัปดาห์ที่ระบุ (ต่อสมาชิกแต่ละคน) ลงตารางประวัติ
+ * เรียกซ้ำได้อย่างปลอดภัย — ถ้าสัปดาห์เดิม+สมาชิกเดิมมีอยู่แล้วจะเขียนทับด้วยยอดล่าสุด ไม่สร้างซ้ำ
+ * rows: [{ discordId, name, hoursWeek, dutyCount }]
+ */
+async function saveWeeklyHistory(weekKey, rows, updatedAt) {
+  await ready;
+  for (const row of rows) {
+    await client.execute({
+      sql: `INSERT INTO weekly_summary_history (week_key, discord_id, name, hours_week, duty_count, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(week_key, discord_id) DO UPDATE SET
+              name = excluded.name,
+              hours_week = excluded.hours_week,
+              duty_count = excluded.duty_count,
+              updated_at = excluded.updated_at`,
+      args: [weekKey, row.discordId, row.name, row.hoursWeek, row.dutyCount, updatedAt],
+    });
+  }
+}
+
+async function getWeeklyHistory(weekKey) {
+  await ready;
+  const { rows } = await client.execute({
+    sql: "SELECT * FROM weekly_summary_history WHERE week_key = ? ORDER BY hours_week DESC",
+    args: [weekKey],
+  });
+  return rows.map(rowToWeeklyHistory);
+}
+
+/**
+ * รายชื่อสัปดาห์ที่เคยบันทึกประวัติไว้ เรียงจากล่าสุดไปเก่าสุด พร้อมยอดรวมของแต่ละสัปดาห์
+ */
+async function listWeeklyHistoryWeeks(limit = 25) {
+  await ready;
+  const { rows } = await client.execute({
+    sql: `SELECT week_key, SUM(hours_week) AS total_hours, COUNT(*) AS member_count
+          FROM weekly_summary_history
+          GROUP BY week_key
+          ORDER BY week_key DESC
+          LIMIT ?`,
+    args: [limit],
+  });
+  return rows.map((r) => ({
+    weekKey: r.week_key,
+    totalHours: Math.round((r.total_hours || 0) * 100) / 100,
+    memberCount: r.member_count,
+  }));
+}
+
 module.exports = {
   findMember,
   addMember,
@@ -391,4 +463,7 @@ module.exports = {
   setRosterPanel,
   getState,
   setState,
+  saveWeeklyHistory,
+  getWeeklyHistory,
+  listWeeklyHistoryWeeks,
 };
