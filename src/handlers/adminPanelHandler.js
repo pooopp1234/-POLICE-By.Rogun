@@ -1,5 +1,5 @@
 const dayjs = require("dayjs");
-const { ActionRowBuilder, ButtonStyle, UserSelectMenuBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder, MessageFlags } = require("discord.js");
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, UserSelectMenuBuilder, StringSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, AttachmentBuilder, MessageFlags } = require("discord.js");
 const db = require("../utils/db");
 const time = require("../utils/time");
 const embeds = require("../utils/embeds");
@@ -12,6 +12,7 @@ const { sendLog } = require("../utils/permissions");
 // key = discord user id ของแอดมินที่กำลังทำรายการ, จะถูกลบทิ้งทันทีที่ใช้เสร็จ
 const pendingRegister = new Map(); // adminId -> { discordId, discordTag, gameName }
 const pendingSetPosition = new Map(); // adminId -> discordId
+const pendingRemoveMember = new Map(); // adminId -> discordId (รอยืนยันก่อนลบจริง)
 
 // ---------- Helper: ตัวเลือกตำแหน่งแบบ select menu ----------
 function positionSelectRow(customId) {
@@ -172,6 +173,31 @@ function setPositionModal() {
   return modal;
 }
 
+function removeMemberModal() {
+  const modal = new ModalBuilder().setCustomId("ap_modal_removemember").setTitle("ลบสมาชิกออกจากรายชื่อ");
+  const idInput = new TextInputBuilder()
+    .setCustomId("discordId")
+    .setLabel("Discord ID ของสมาชิกที่จะลบ (ตัวเลขล้วน)")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
+  modal.addComponents(new ActionRowBuilder().addComponents(idInput));
+  return modal;
+}
+
+function removeMemberConfirmRow(discordId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`ap_removemember_confirm:${discordId}`)
+      .setLabel("ยืนยันลบ")
+      .setEmoji("🗑️")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId("ap_removemember_cancel")
+      .setLabel("ยกเลิก")
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
 // ---------- ปุ่มหลัก ----------
 
 async function handleButton(interaction) {
@@ -185,6 +211,9 @@ async function handleButton(interaction) {
   if (id in USER_SELECT_META) return handleAskUser(interaction, id);
   if (id === "ap_register") return interaction.showModal(registerModal());
   if (id === "ap_setposition") return interaction.showModal(setPositionModal());
+  if (id === "ap_removemember") return interaction.showModal(removeMemberModal());
+  if (id.startsWith("ap_removemember_confirm:")) return handleRemoveMemberConfirm(interaction, id.split(":")[1]);
+  if (id === "ap_removemember_cancel") return handleRemoveMemberCancel(interaction);
 }
 
 // ---------- User select menu (ขั้นตอนที่ 2 ของ เพิ่ม/ลดชั่วโมง, แก้เวลา, ล้างสถานะเวร) ----------
@@ -533,6 +562,85 @@ async function handleModalSetPosition(interaction) {
   });
 }
 
+async function handleModalRemoveMember(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const discordId = interaction.fields.getTextInputValue("discordId").trim();
+
+  if (!/^\d{17,20}$/.test(discordId)) {
+    return interaction.editReply({
+      embeds: [embeds.errorEmbed("ไอดีดิสคอร์ดไม่ถูกต้อง กรุณาใส่เฉพาะตัวเลข (17-20 หลัก)")],
+    });
+  }
+
+  const existing = await db.findMember(discordId);
+  if (!existing) {
+    return interaction.editReply({
+      embeds: [embeds.errorEmbed("ไม่พบสมาชิกไอดีนี้ในระบบ")],
+    });
+  }
+
+  pendingRemoveMember.set(interaction.user.id, discordId);
+
+  await interaction.editReply({
+    embeds: [
+      embeds.adminActionEmbed(
+        "⚠️ ยืนยันการลบสมาชิก",
+        `ต้องการลบ **${existing.gameName}** (${existing.discordName}) ออกจากรายชื่อใช่หรือไม่?\nประวัติการเข้าเวรเดิมจะยังคงอยู่ แต่จะไม่สามารถเข้าเวรได้อีกจนกว่าจะสมัครใหม่`,
+        [{ name: "ตำแหน่งปัจจุบัน", value: existing.position || "-", inline: true }]
+      ),
+    ],
+    components: [removeMemberConfirmRow(discordId)],
+  });
+}
+
+// ---------- ปุ่มยืนยัน/ยกเลิก การลบสมาชิก ----------
+
+async function handleRemoveMemberConfirm(interaction, discordId) {
+  const pending = pendingRemoveMember.get(interaction.user.id);
+  if (!pending || pending !== discordId) {
+    return interaction.update({
+      content: "หมดเวลาการลบสมาชิก กรุณากดปุ่ม \"ลบสมาชิก\" ใหม่อีกครั้ง",
+      embeds: [],
+      components: [],
+    });
+  }
+  pendingRemoveMember.delete(interaction.user.id);
+  await interaction.deferUpdate();
+
+  const existing = await db.findMember(discordId);
+  if (!existing) {
+    return interaction.editReply({
+      embeds: [embeds.errorEmbed("ไม่พบสมาชิกไอดีนี้ในระบบแล้ว (อาจถูกลบไปก่อนหน้านี้)")],
+      components: [],
+    });
+  }
+
+  await db.removeMember(discordId);
+  await roster.refreshRoster(interaction.client);
+
+  const embed = embeds.successEmbed(`ลบสมาชิก ${existing.gameName} (${existing.discordName}) ออกจากระบบเรียบร้อยแล้ว`);
+
+  await interaction.editReply({ embeds: [embed], components: [] });
+
+  await sendLog(
+    interaction.client,
+    "แอดมิน",
+    embeds.adminActionEmbed("🗑️ ลบสมาชิก", `แอดมิน ${interaction.user.tag} ลบสมาชิกออกจากระบบ`, [
+      { name: "สมาชิก", value: `${existing.gameName} (${existing.discordName})`, inline: true },
+      { name: "ตำแหน่งเดิม", value: existing.position || "-", inline: true },
+    ])
+  );
+}
+
+async function handleRemoveMemberCancel(interaction) {
+  pendingRemoveMember.delete(interaction.user.id);
+  await interaction.update({
+    embeds: [embeds.adminActionEmbed("ยกเลิกแล้ว", "ไม่มีการลบสมาชิกเกิดขึ้น")],
+    components: [],
+  });
+}
+
 async function handleModalSubmit(interaction) {
   const [action, targetId] = interaction.customId.split(":");
 
@@ -541,6 +649,7 @@ async function handleModalSubmit(interaction) {
   if (action === "ap_modal_edittime") return handleModalEditTime(interaction, targetId);
   if (action === "ap_modal_register") return handleModalRegister(interaction);
   if (action === "ap_modal_setposition") return handleModalSetPosition(interaction);
+  if (action === "ap_modal_removemember") return handleModalRemoveMember(interaction);
 }
 
 module.exports = {

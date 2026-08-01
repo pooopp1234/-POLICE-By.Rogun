@@ -147,6 +147,15 @@ async function updateMemberPosition(discordId, position) {
   return Number(result.rowsAffected) > 0;
 }
 
+async function removeMember(discordId) {
+  await ready;
+  const result = await client.execute({
+    sql: "DELETE FROM members WHERE discord_id = ?",
+    args: [discordId],
+  });
+  return Number(result.rowsAffected) > 0;
+}
+
 // ---------- Duty Log ----------
 
 async function getDutyLogs(discordId = null) {
@@ -365,6 +374,7 @@ module.exports = {
   addMember,
   getAllMembers,
   updateMemberPosition,
+  removeMember,
   getDutyLogs,
   findOpenDuty,
   getAllOpenDuty,
