@@ -19,7 +19,7 @@ module.exports = {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const { members, dutyLog, summary } = db.exportAllCsv();
+    const { members, dutyLog, summary } = await db.exportAllCsv();
 
     const files = [
       new AttachmentBuilder(Buffer.from(members, "utf-8"), { name: "members.csv" }),

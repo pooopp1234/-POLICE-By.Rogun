@@ -93,7 +93,7 @@ async function handleSummary(interaction) {
 
 async function handleExport(interaction) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const { members, dutyLog, summary } = db.exportAllCsv();
+  const { members, dutyLog, summary } = await db.exportAllCsv();
   const files = [
     new AttachmentBuilder(Buffer.from(members, "utf-8"), { name: "members.csv" }),
     new AttachmentBuilder(Buffer.from(dutyLog, "utf-8"), { name: "duty_log.csv" }),
