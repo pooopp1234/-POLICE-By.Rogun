@@ -13,8 +13,7 @@ function adminPanelEmbed() {
       "ห้องนี้จำกัดเฉพาะแอดมิน — กดปุ่มด้านล่างแทนการพิมพ์คำสั่ง /\n\n" +
         "**ข้อมูล:** 📋 คนเข้าเวรตอนนี้ / 📊 สรุปสัปดาห์นี้ / 📁 ส่งออก CSV\n" +
         "**จัดการชั่วโมง/เวลา:** ➕ เพิ่ม / ➖ ลด / ✏️ แก้เวลา / 🧹 ล้างสถานะเวร\n" +
-        "**จัดการสมาชิก:** 🆕 เพิ่มสมาชิก / 🎖️ แก้ไขตำแหน่ง\n" +
-        "**ตั้งค่าห้องอื่น:** 📌 โพสต์แผงเข้าเวร / 📌 โพสต์ห้องรายชื่อ (โพสต์ลงห้องนี้)"
+        "**จัดการสมาชิก:** 🆕 เพิ่มสมาชิก / 🎖️ แก้ไขตำแหน่ง"
     )
     .setFooter({ text: "POLICE CASE SYSTEM • Admin Panel" })
     .setTimestamp();
@@ -39,20 +38,7 @@ function adminPanelRows() {
     new ButtonBuilder().setCustomId("ap_setposition").setLabel("แก้ไขตำแหน่ง").setEmoji("🎖️").setStyle(ButtonStyle.Secondary)
   );
 
-  const rowSetup = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("ap_postdutypanel")
-      .setLabel("โพสต์แผงเข้าเวร (ห้องนี้)")
-      .setEmoji("📌")
-      .setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder()
-      .setCustomId("ap_postroster")
-      .setLabel("โพสต์ห้องรายชื่อ (ห้องนี้)")
-      .setEmoji("📌")
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  return [rowInfo, rowHours, rowMembers, rowSetup];
+  return [rowInfo, rowHours, rowMembers];
 }
 
 module.exports = { adminPanelEmbed, adminPanelRows };
