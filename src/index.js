@@ -6,8 +6,10 @@ const embeds = require("./utils/embeds");
 const dutyActions = require("./utils/dutyActions");
 const panel = require("./utils/panel");
 const weeklyReset = require("./utils/weeklyReset");
+const queue = require("./utils/queue");
 const { sendLog } = require("./utils/permissions");
 const adminPanelHandler = require("./handlers/adminPanelHandler");
+const queueHandler = require("./handlers/queueHandler");
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
@@ -35,7 +37,9 @@ client.once("ready", async () => {
   console.log(`บอทออนไลน์แล้วในชื่อ ${client.user.tag}`);
   console.log(`โหลดคำสั่งทั้งหมด ${client.commands.size} คำสั่ง`);
   await panel.refreshPanel(client); // ซิงก์แผงเข้าเวรที่ปักไว้ให้ตรงกับสถานะล่าสุดหลังบอทรีสตาร์ท
+  await queue.refreshQueuePanel(client); // ซิงก์แผงคิวแพทย์ที่ปักไว้เช่นกัน
   weeklyReset.start(client); // เริ่มระบบสรุป + รีเซ็ตชั่วโมงเวรรายสัปดาห์อัตโนมัติ
+  queue.start(client); // เริ่มระบบเช็คคนพักหมดเวลาในคิวแพทย์อัตโนมัติ
 });
 
 client.on("interactionCreate", async (interaction) => {
@@ -97,6 +101,16 @@ client.on("interactionCreate", async (interaction) => {
         console.error(`เกิดข้อผิดพลาดในแผงแอดมิน (ปุ่ม ${interaction.customId}):`, err);
         await safeErrorReply(interaction);
       }
+      return;
+    }
+
+    if (interaction.customId.startsWith("q_")) {
+      try {
+        await queueHandler.handleButton(interaction);
+      } catch (err) {
+        console.error(`เกิดข้อผิดพลาดในระบบคิวแพทย์ (ปุ่ม ${interaction.customId}):`, err);
+        await safeErrorReply(interaction);
+      }
     }
     return;
   }
@@ -126,6 +140,16 @@ client.on("interactionCreate", async (interaction) => {
       await adminPanelHandler.handleModalSubmit(interaction);
     } catch (err) {
       console.error(`เกิดข้อผิดพลาดในแผงแอดมิน (modal ${interaction.customId}):`, err);
+      await safeErrorReply(interaction);
+    }
+    return;
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId.startsWith("q_modal_")) {
+    try {
+      await queueHandler.handleModalSubmit(interaction);
+    } catch (err) {
+      console.error(`เกิดข้อผิดพลาดในระบบคิวแพทย์ (modal ${interaction.customId}):`, err);
       await safeErrorReply(interaction);
     }
     return;
