@@ -70,7 +70,7 @@ function buildSummaryEmbed(weekKey, rows, { auto = false } = {}) {
 
   const fields = rows.slice(0, 25).map((r) => ({
     name: r.name,
-    value: `${r.hoursWeek} ชม. (${r.dutyCount} ครั้ง)`,
+    value: `${time.formatDurationThai(r.hoursWeek)} (${r.dutyCount} ครั้ง)`,
     inline: true,
   }));
 

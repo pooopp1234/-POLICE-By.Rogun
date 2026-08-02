@@ -40,6 +40,16 @@ function hoursBetween(checkInIso, checkOutIso) {
   return Math.round(hours * 100) / 100;
 }
 
+// แปลงชั่วโมงแบบทศนิยม (เช่น 13.88) ให้เป็นข้อความไทย "13 ชม. 52 นาที 48 วินาที"
+// ใช้กับหน้าสรุปรายสัปดาห์ให้อ่านง่ายเหมือนระบบเช็คชื่ออื่นๆ
+function formatDurationThai(hoursDecimal) {
+  const totalSeconds = Math.max(0, Math.round((hoursDecimal || 0) * 3600));
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${h} ชม. ${m} นาที ${s} วินาที`;
+}
+
 function isSameDay(iso, dateStr) {
   return dayjs(iso).tz(TZ).format("YYYY-MM-DD") === dateStr;
 }
@@ -132,6 +142,7 @@ module.exports = {
   displayDateTime,
   displayThaiDateTime,
   hoursBetween,
+  formatDurationThai,
   isSameDay,
   isSameWeek,
   isSameMonth,

@@ -84,7 +84,7 @@ async function handleSummary(interaction) {
   rows.sort((a, b) => b.hoursWeek - a.hoursWeek);
   const fields = rows.slice(0, 25).map((r) => ({
     name: r.name,
-    value: `${r.hoursWeek} ชม. (${r.dutyCount} ครั้ง)`,
+    value: `${time.formatDurationThai(r.hoursWeek)} (${r.dutyCount} ครั้ง)`,
     inline: true,
   }));
 
@@ -156,7 +156,7 @@ async function handleWeeklyHistoryList(interaction) {
     .addOptions(
       weeks.map((w) => ({
         label: w.weekKey,
-        description: `${w.totalHours} ชม. รวม / ${w.memberCount} คน`,
+        description: `${time.formatDurationThai(w.totalHours)} รวม / ${w.memberCount} คน`,
         value: w.weekKey,
       }))
     );
@@ -442,7 +442,7 @@ async function handleSelectWeeklyHistory(interaction) {
 
   const fields = rows.slice(0, 25).map((r) => ({
     name: r.name,
-    value: `${r.hoursWeek} ชม. (${r.dutyCount} ครั้ง)`,
+    value: `${time.formatDurationThai(r.hoursWeek)} (${r.dutyCount} ครั้ง)`,
     inline: true,
   }));
 

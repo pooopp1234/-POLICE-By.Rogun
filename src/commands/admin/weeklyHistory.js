@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const db = require("../../utils/db");
+const time = require("../../utils/time");
 const embeds = require("../../utils/embeds");
 const { isAdmin } = require("../../utils/permissions");
 
@@ -36,7 +37,7 @@ module.exports = {
       }
       const fields = weeks.map((w) => ({
         name: w.weekKey,
-        value: `${w.totalHours} ชม. รวม / ${w.memberCount} คน`,
+        value: `${time.formatDurationThai(w.totalHours)} รวม / ${w.memberCount} คน`,
         inline: true,
       }));
       return interaction.editReply({
@@ -65,7 +66,7 @@ module.exports = {
 
     const fields = rows.slice(0, 25).map((r) => ({
       name: r.name,
-      value: `${r.hoursWeek} ชม. (${r.dutyCount} ครั้ง)`,
+      value: `${time.formatDurationThai(r.hoursWeek)} (${r.dutyCount} ครั้ง)`,
       inline: true,
     }));
 

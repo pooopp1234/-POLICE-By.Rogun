@@ -55,7 +55,7 @@ module.exports = {
     rows.sort((a, b) => b.hoursWeek - a.hoursWeek);
     const fields = rows.slice(0, 25).map((r) => ({
       name: r.name,
-      value: `${r.hoursWeek} ชม. (${r.dutyCount} ครั้ง)`,
+      value: `${time.formatDurationThai(r.hoursWeek)} (${r.dutyCount} ครั้ง)`,
       inline: true,
     }));
 
