@@ -14,31 +14,32 @@ function plateRegisterModal() {
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
-  const ownerInput = new TextInputBuilder()
-    .setCustomId("ownerName")
-    .setLabel("ชื่อเจ้าของ/ผู้ขับ")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(plateInput),
-    new ActionRowBuilder().addComponents(ownerInput)
-  );
+  modal.addComponents(new ActionRowBuilder().addComponents(plateInput));
   return modal;
 }
 
 async function handleRegisterModal(interaction) {
   const plateNumber = interaction.fields.getTextInputValue("plateNumber").trim();
-  const ownerName = interaction.fields.getTextInputValue("ownerName").trim();
 
-  if (!plateNumber || !ownerName) {
+  if (!plateNumber) {
     return interaction.reply({
-      embeds: [embeds.errorEmbed("กรุณากรอกเลขทะเบียนและชื่อเจ้าของ/ผู้ขับให้ครบ")],
+      embeds: [embeds.errorEmbed("กรุณากรอกเลขทะเบียน")],
       flags: MessageFlags.Ephemeral,
     });
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const member = await db.findMember(interaction.user.id);
+  if (!member) {
+    return interaction.editReply({
+      embeds: [
+        embeds.errorEmbed("คุณยังไม่ได้เป็นสมาชิกในระบบ กรุณาติดต่อแอดมินเพื่อเพิ่มชื่อคุณก่อนลงทะเบียนป้ายทะเบียน"),
+      ],
+    });
+  }
+
+  const ownerName = member.gameName;
 
   const nowIso = time.nowIso();
   const created = await db.addPlate({
