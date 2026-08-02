@@ -10,6 +10,7 @@ const queue = require("./utils/queue");
 const { sendLog } = require("./utils/permissions");
 const adminPanelHandler = require("./handlers/adminPanelHandler");
 const queueHandler = require("./handlers/queueHandler");
+const plateHandler = require("./handlers/plateHandler");
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
@@ -111,6 +112,16 @@ client.on("interactionCreate", async (interaction) => {
         console.error(`เกิดข้อผิดพลาดในระบบคิวแพทย์ (ปุ่ม ${interaction.customId}):`, err);
         await safeErrorReply(interaction);
       }
+      return;
+    }
+
+    if (interaction.customId.startsWith("plate_")) {
+      try {
+        await plateHandler.handleButton(interaction);
+      } catch (err) {
+        console.error(`เกิดข้อผิดพลาดในระบบป้ายทะเบียน (ปุ่ม ${interaction.customId}):`, err);
+        await safeErrorReply(interaction);
+      }
     }
     return;
   }
@@ -150,6 +161,16 @@ client.on("interactionCreate", async (interaction) => {
       await queueHandler.handleModalSubmit(interaction);
     } catch (err) {
       console.error(`เกิดข้อผิดพลาดในระบบคิวแพทย์ (modal ${interaction.customId}):`, err);
+      await safeErrorReply(interaction);
+    }
+    return;
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId.startsWith("plate_modal_")) {
+    try {
+      await plateHandler.handleModalSubmit(interaction);
+    } catch (err) {
+      console.error(`เกิดข้อผิดพลาดในระบบป้ายทะเบียน (modal ${interaction.customId}):`, err);
       await safeErrorReply(interaction);
     }
     return;

@@ -321,6 +321,61 @@ function queueBreakDurationRow() {
   );
 }
 
+// ---------- ระบบลงทะเบียนป้ายทะเบียนรถ ----------
+
+function plateSubmitPanelEmbeds() {
+  const headerEmbed = new EmbedBuilder().setColor(0x5865f2).setTitle("🚘 ระบบลงทะเบียนป้ายทะเบียนรถ");
+
+  const infoEmbed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setDescription("กดปุ่มด้านล่างเพื่อลงทะเบียนป้ายทะเบียนรถคันใหม่ (เลขทะเบียน + ชื่อเจ้าของ/ผู้ขับ)")
+    .setFooter({ text: "POLICE CASE SYSTEM • Plate Registration" })
+    .setTimestamp();
+
+  return [headerEmbed, infoEmbed];
+}
+
+function plateSubmitRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("plate_register").setLabel("ลงทะเบียนใหม่").setEmoji("🚘").setStyle(ButtonStyle.Primary)
+  );
+}
+
+const PLATE_DIVIDER = "> ══════════════════════";
+const PLATE_CHUNK_LIMIT = 3800;
+
+function plateListEmbeds(plates, updatedAtText) {
+  const header = `# 🚘 ทะเบียนรถที่ลงทะเบียนไว้\n${PLATE_DIVIDER}`;
+  const footer = `${PLATE_DIVIDER}\n> อัปเดตล่าสุด : ${updatedAtText} | จำนวนทั้งหมด ${plates.length} คัน`;
+
+  const lines =
+    plates.length === 0
+      ? ["`ยังไม่มีการลงทะเบียนป้ายทะเบียน`"]
+      : plates.map((p) => `\`${p.plateNumber}\` — เจ้าของ/ผู้ขับ: ${p.ownerName}`);
+
+  const chunks = [];
+  let current = header;
+  for (const line of lines) {
+    const candidate = `${current}\n${line}`;
+    if (candidate.length > PLATE_CHUNK_LIMIT) {
+      chunks.push(current);
+      current = line;
+    } else {
+      current = candidate;
+    }
+  }
+  chunks.push(current);
+
+  const lastIndex = chunks.length - 1;
+  if (chunks[lastIndex].length + footer.length + 1 <= PLATE_CHUNK_LIMIT) {
+    chunks[lastIndex] += `\n${footer}`;
+  } else {
+    chunks.push(footer);
+  }
+
+  return chunks.slice(0, 10).map((desc) => new EmbedBuilder().setColor(0x5865f2).setDescription(desc));
+}
+
 module.exports = {
   registerEmbed,
   checkInEmbed,
@@ -337,4 +392,7 @@ module.exports = {
   queueEmbed,
   queueMainRow,
   queueBreakDurationRow,
+  plateSubmitPanelEmbeds,
+  plateSubmitRow,
+  plateListEmbeds,
 };

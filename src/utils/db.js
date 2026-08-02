@@ -99,6 +99,24 @@ const SCHEMA_STATEMENTS = [
     duration_minutes REAL,
     created_at TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS vehicle_plates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plate_number TEXT UNIQUE,
+    owner_name TEXT,
+    registered_by TEXT,
+    registered_by_name TEXT,
+    created_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS plate_panel (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    channel_id TEXT,
+    message_id TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS plate_list_panel (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    channel_id TEXT,
+    message_id TEXT
+  )`,
 ];
 
 const ready = (async () => {
@@ -621,6 +639,90 @@ async function clearQueueMembers() {
   await client.execute("DELETE FROM queue_members");
 }
 
+// ---------- ระบบลงทะเบียนป้ายทะเบียนรถ ----------
+
+function rowToPlate(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    plateNumber: row.plate_number,
+    ownerName: row.owner_name,
+    registeredBy: row.registered_by,
+    registeredByName: row.registered_by_name,
+    createdAt: row.created_at,
+  };
+}
+
+async function findPlateByNumber(plateNumber) {
+  await ready;
+  const { rows } = await client.execute({
+    sql: "SELECT * FROM vehicle_plates WHERE plate_number = ?",
+    args: [plateNumber],
+  });
+  return rowToPlate(rows[0]);
+}
+
+async function getAllPlates() {
+  await ready;
+  const { rows } = await client.execute("SELECT * FROM vehicle_plates ORDER BY plate_number ASC");
+  return rows.map(rowToPlate);
+}
+
+/** ลงทะเบียนป้ายทะเบียนใหม่ คืนค่า null ถ้าเลขทะเบียนนี้มีอยู่แล้ว (กันซ้ำ) */
+async function addPlate(entry) {
+  await ready;
+  const existing = await findPlateByNumber(entry.plateNumber);
+  if (existing) return null;
+
+  await client.execute({
+    sql: `INSERT INTO vehicle_plates (plate_number, owner_name, registered_by, registered_by_name, created_at)
+          VALUES (?, ?, ?, ?, ?)`,
+    args: [entry.plateNumber, entry.ownerName, entry.registeredBy, entry.registeredByName, entry.createdAt],
+  });
+  return findPlateByNumber(entry.plateNumber);
+}
+
+async function removePlate(plateNumber) {
+  await ready;
+  const result = await client.execute({
+    sql: "DELETE FROM vehicle_plates WHERE plate_number = ?",
+    args: [plateNumber],
+  });
+  return Number(result.rowsAffected) > 0;
+}
+
+async function getPlatePanel() {
+  await ready;
+  const { rows } = await client.execute("SELECT channel_id, message_id FROM plate_panel WHERE id = 1");
+  if (!rows[0]) return null;
+  return { channelId: rows[0].channel_id, messageId: rows[0].message_id };
+}
+
+async function setPlatePanel(channelId, messageId) {
+  await ready;
+  await client.execute({
+    sql: `INSERT INTO plate_panel (id, channel_id, message_id) VALUES (1, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET channel_id = excluded.channel_id, message_id = excluded.message_id`,
+    args: [channelId, messageId],
+  });
+}
+
+async function getPlateListPanel() {
+  await ready;
+  const { rows } = await client.execute("SELECT channel_id, message_id FROM plate_list_panel WHERE id = 1");
+  if (!rows[0]) return null;
+  return { channelId: rows[0].channel_id, messageId: rows[0].message_id };
+}
+
+async function setPlateListPanel(channelId, messageId) {
+  await ready;
+  await client.execute({
+    sql: `INSERT INTO plate_list_panel (id, channel_id, message_id) VALUES (1, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET channel_id = excluded.channel_id, message_id = excluded.message_id`,
+    args: [channelId, messageId],
+  });
+}
+
 // ---------- Queue Panel (ข้อความปักหมุดของระบบคิวแพทย์) ----------
 
 async function getQueuePanel() {
@@ -679,4 +781,12 @@ module.exports = {
   getQueuePanel,
   setQueuePanel,
   clearQueueMembers,
+  findPlateByNumber,
+  getAllPlates,
+  addPlate,
+  removePlate,
+  getPlatePanel,
+  setPlatePanel,
+  getPlateListPanel,
+  setPlateListPanel,
 };
