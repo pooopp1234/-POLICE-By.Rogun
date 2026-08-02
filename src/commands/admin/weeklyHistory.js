@@ -36,7 +36,7 @@ module.exports = {
         });
       }
       const fields = weeks.map((w) => ({
-        name: w.weekKey,
+        name: `${w.weekKey} • ${time.weekRangeThaiFromKey(w.weekKey)}`,
         value: `${time.formatDurationThai(w.totalHours)} รวม / ${w.memberCount} คน`,
         inline: true,
       }));
@@ -71,7 +71,13 @@ module.exports = {
     }));
 
     await interaction.editReply({
-      embeds: [embeds.adminActionEmbed(`📜 สรุปสัปดาห์ ${weekKey}`, `รวม ${rows.length} คนที่มีข้อมูลในสัปดาห์นี้`, fields)],
+      embeds: [
+        embeds.adminActionEmbed(
+          `📜 สรุปสัปดาห์ ${time.weekRangeThaiFromKey(weekKey)}`,
+          `รวม ${rows.length} คนที่มีข้อมูลในสัปดาห์นี้`,
+          fields
+        ),
+      ],
     });
   },
 };

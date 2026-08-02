@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require("discord.js");
 const embeds = require("../../utils/embeds");
+const time = require("../../utils/time");
 const weeklyReset = require("../../utils/weeklyReset");
 const { isAdmin } = require("../../utils/permissions");
 
@@ -24,7 +25,7 @@ module.exports = {
     await interaction.editReply({
       embeds: [
         embeds.successEmbed(
-          `สั่งสรุปสัปดาห์ ${weekKey} ทันทีเรียบร้อยแล้ว (${rows.length} คนมีข้อมูล) — บันทึกลงประวัติแล้ว`
+          `สั่งสรุปสัปดาห์ (${time.weekRangeThaiFromKey(weekKey)}) ทันทีเรียบร้อยแล้ว (${rows.length} คนมีข้อมูล) — บันทึกลงประวัติแล้ว`
         ),
         embed,
       ],

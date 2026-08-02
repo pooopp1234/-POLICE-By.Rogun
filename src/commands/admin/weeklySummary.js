@@ -59,10 +59,12 @@ module.exports = {
       inline: true,
     }));
 
+    const rangeText = time.weekRangeThai();
+
     await interaction.editReply({
       embeds: [
         embeds.adminActionEmbed(
-          "📊 สรุปสัปดาห์นี้",
+          `📊 สรุปสัปดาห์นี้ (${rangeText})`,
           `อัปเดตข้อมูลลงชีต Summary แล้ว (${rows.length} คน) — ระบบจะสรุปและรีเซ็ตยอดรายสัปดาห์อัตโนมัติทุกต้นสัปดาห์`,
           fields
         ),

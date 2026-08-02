@@ -50,6 +50,46 @@ function formatDurationThai(hoursDecimal) {
   return `${h} ชม. ${m} นาที ${s} วินาที`;
 }
 
+const THAI_MONTHS_SHORT = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+];
+
+// แสดงช่วงวันที่ของสัปดาห์ (จันทร์-อาทิตย์) แบบไทย เช่น "03-09 ส.ค. 69"
+// ถ้าคาบเกี่ยวคนละเดือน/ปี จะโชว์เดือน(ปี)ของทั้งสองฝั่งให้ครบ เช่น "29 ก.ค. - 04 ส.ค. 69"
+function weekRangeThai(refDate) {
+  const d = (refDate ? dayjs(refDate) : dayjs()).tz(TZ);
+  const start = d.startOf("isoWeek");
+  const end = d.endOf("isoWeek");
+
+  const startDay = start.format("DD");
+  const endDay = end.format("DD");
+  const startMonth = THAI_MONTHS_SHORT[start.month()];
+  const endMonth = THAI_MONTHS_SHORT[end.month()];
+  const startYearBE = String((start.year() + 543) % 100).padStart(2, "0");
+  const endYearBE = String((end.year() + 543) % 100).padStart(2, "0");
+
+  if (start.year() === end.year() && start.month() === end.month()) {
+    return `${startDay}-${endDay} ${endMonth} ${endYearBE}`;
+  }
+  if (start.year() === end.year()) {
+    return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${endYearBE}`;
+  }
+  return `${startDay} ${startMonth} ${startYearBE} - ${endDay} ${endMonth} ${endYearBE}`;
+}
+
+// เหมือน weekRangeThai แต่รับ weekKey แบบ "YYYY-Www" (ที่เก็บไว้ในประวัติ) แทนวันที่ตรงๆ
+function weekRangeThaiFromKey(weekKey) {
+  const match = /^(\d{4})-W(\d{2})$/.exec(weekKey || "");
+  if (!match) return weekKey;
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  // 4 มกราคมของปีนั้นอยู่ใน ISO week 1 เสมอ (ตามนิยาม ISO 8601) ใช้เป็นจุดอ้างอิงแล้วกระโดดไปสัปดาห์ที่ต้องการ
+  const jan4 = dayjs(`${year}-01-04`).tz(TZ);
+  const ref = jan4.isoWeek(week);
+  return weekRangeThai(ref);
+}
+
 function isSameDay(iso, dateStr) {
   return dayjs(iso).tz(TZ).format("YYYY-MM-DD") === dateStr;
 }
@@ -143,6 +183,8 @@ module.exports = {
   displayThaiDateTime,
   hoursBetween,
   formatDurationThai,
+  weekRangeThai,
+  weekRangeThaiFromKey,
   isSameDay,
   isSameWeek,
   isSameMonth,

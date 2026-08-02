@@ -77,7 +77,7 @@ async function handleSummary(interaction) {
 
   if (rows.length === 0) {
     return interaction.editReply({
-      embeds: [embeds.adminActionEmbed("📊 สรุปสัปดาห์นี้", "ยังไม่มีข้อมูลการเข้าเวรในสัปดาห์นี้")],
+      embeds: [embeds.adminActionEmbed(`📊 สรุปสัปดาห์นี้ (${time.weekRangeThai()})`, "ยังไม่มีข้อมูลการเข้าเวรในสัปดาห์นี้")],
     });
   }
 
@@ -89,7 +89,13 @@ async function handleSummary(interaction) {
   }));
 
   await interaction.editReply({
-    embeds: [embeds.adminActionEmbed("📊 สรุปสัปดาห์นี้", `อัปเดตข้อมูลลงฐานข้อมูล Summary แล้ว (${rows.length} คน) — ระบบจะสรุปและรีเซ็ตยอดรายสัปดาห์อัตโนมัติทุกต้นสัปดาห์`, fields)],
+    embeds: [
+      embeds.adminActionEmbed(
+        `📊 สรุปสัปดาห์นี้ (${time.weekRangeThai()})`,
+        `อัปเดตข้อมูลลงฐานข้อมูล Summary แล้ว (${rows.length} คน) — ระบบจะสรุปและรีเซ็ตยอดรายสัปดาห์อัตโนมัติทุกต้นสัปดาห์`,
+        fields
+      ),
+    ],
   });
 }
 
@@ -133,7 +139,7 @@ async function handleRunWeekly(interaction) {
   await interaction.editReply({
     embeds: [
       embeds.successEmbed(
-        `สั่งสรุปสัปดาห์ ${weekKey} ทันทีเรียบร้อยแล้ว (${rows.length} คนมีข้อมูล) — บันทึกลงประวัติแล้ว`
+        `สั่งสรุปสัปดาห์ (${time.weekRangeThaiFromKey(weekKey)}) ทันทีเรียบร้อยแล้ว (${rows.length} คนมีข้อมูล) — บันทึกลงประวัติแล้ว`
       ),
       embed,
     ],
@@ -155,7 +161,7 @@ async function handleWeeklyHistoryList(interaction) {
     .setPlaceholder("เลือกสัปดาห์ที่ต้องการดู")
     .addOptions(
       weeks.map((w) => ({
-        label: w.weekKey,
+        label: `${w.weekKey} • ${time.weekRangeThaiFromKey(w.weekKey)}`,
         description: `${time.formatDurationThai(w.totalHours)} รวม / ${w.memberCount} คน`,
         value: w.weekKey,
       }))
@@ -446,7 +452,11 @@ async function handleSelectWeeklyHistory(interaction) {
     inline: true,
   }));
 
-  const embed = embeds.adminActionEmbed(`📜 สรุปสัปดาห์ ${weekKey}`, `รวม ${rows.length} คนที่มีข้อมูลในสัปดาห์นี้`, fields);
+  const embed = embeds.adminActionEmbed(
+    `📜 สรุปสัปดาห์ ${time.weekRangeThaiFromKey(weekKey)}`,
+    `รวม ${rows.length} คนที่มีข้อมูลในสัปดาห์นี้`,
+    fields
+  );
 
   await interaction.editReply({ content: null, embeds: [embed], components: [] });
 }

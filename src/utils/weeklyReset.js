@@ -61,12 +61,13 @@ async function persistWeeklySummary(weekKey, rows) {
 }
 
 function buildSummaryEmbed(weekKey, rows, { auto = false } = {}) {
+  const rangeText = time.weekRangeThaiFromKey(weekKey);
   const description =
     rows.length === 0
       ? "ไม่มีข้อมูลการเข้าเวรในสัปดาห์ที่ผ่านมา"
       : auto
-      ? `สรุปชั่วโมงเวรของสัปดาห์ที่ผ่านมา (${weekKey}) — ตัวนับรายสัปดาห์เริ่มนับใหม่ตั้งแต่ตอนนี้ ข้อมูลเก่ายังเก็บไว้ครบในประวัติ`
-      : `สรุปชั่วโมงเวรของสัปดาห์ (${weekKey}) — สั่งรันด้วยตนเอง บันทึกลงประวัติเรียบร้อยแล้ว`;
+      ? `สรุปชั่วโมงเวรของสัปดาห์ที่ผ่านมา (${rangeText}) — ตัวนับรายสัปดาห์เริ่มนับใหม่ตั้งแต่ตอนนี้ ข้อมูลเก่ายังเก็บไว้ครบในประวัติ`
+      : `สรุปชั่วโมงเวรของสัปดาห์ (${rangeText}) — สั่งรันด้วยตนเอง บันทึกลงประวัติเรียบร้อยแล้ว`;
 
   const fields = rows.slice(0, 25).map((r) => ({
     name: r.name,
@@ -75,7 +76,7 @@ function buildSummaryEmbed(weekKey, rows, { auto = false } = {}) {
   }));
 
   return embeds.adminActionEmbed(
-    auto ? `📅 สรุปรายสัปดาห์อัตโนมัติ (${weekKey})` : `📅 สรุปรายสัปดาห์ (${weekKey})`,
+    auto ? `📅 สรุปรายสัปดาห์อัตโนมัติ (${rangeText})` : `📅 สรุปรายสัปดาห์ (${rangeText})`,
     description,
     fields
   );
