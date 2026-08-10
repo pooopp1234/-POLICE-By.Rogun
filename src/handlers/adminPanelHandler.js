@@ -7,13 +7,39 @@ const roster = require("../utils/roster");
 const panel = require("../utils/panel");
 const weeklyReset = require("../utils/weeklyReset");
 const config = require("../../config.json");
-const { sendLog } = require("../utils/permissions");
+const { sendLog, isAdmin } = require("../utils/permissions");
+const { swapPositionRole, setNickname, assignRoles } = require("../utils/discordSync");
 
 // เก็บสถานะชั่วคราวระหว่างขั้นตอนหลายสเต็ป (เฉพาะ "เพิ่มสมาชิก" และ "แก้ไขตำแหน่ง" ที่ต้องเลือกตำแหน่งต่อจาก modal)
 // key = discord user id ของแอดมินที่กำลังทำรายการ, จะถูกลบทิ้งทันทีที่ใช้เสร็จ
 const pendingRegister = new Map(); // adminId -> { discordId, discordTag, gameName }
 const pendingSetPosition = new Map(); // adminId -> discordId
 const pendingRemoveMember = new Map(); // adminId -> discordId (รอยืนยันก่อนลบจริง)
+
+// ---------- Helper: เช็คสิทธิ์แอดมินก่อนให้ใช้งานทุกปุ่ม/เมนู/modal ในแผงควบคุมแอดมิน ----------
+// คืนค่า true ถ้า "ไม่ใช่" แอดมิน (และได้ตอบ interaction แจ้งเตือนไปแล้ว) — ใช้ return early ที่ตัวเรียก
+async function blockIfNotAdmin(interaction) {
+  if (isAdmin(interaction)) return false;
+
+  const denyReply = {
+    embeds: [embeds.errorEmbed("คุณไม่มีสิทธิ์ใช้งานแผงควบคุมแอดมิน")],
+    flags: MessageFlags.Ephemeral,
+  };
+
+  try {
+    if (interaction.isModalSubmit() || interaction.isMessageComponent()) {
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(denyReply);
+      } else {
+        await interaction.reply(denyReply);
+      }
+    }
+  } catch (err) {
+    console.error("แจ้งเตือนสิทธิ์แอดมินไม่สำเร็จ:", err.message);
+  }
+
+  return true;
+}
 
 // ---------- Helper: ตัวเลือกตำแหน่งแบบ select menu ----------
 function positionSelectRow(customId) {
@@ -248,6 +274,8 @@ function removeMemberConfirmRow(discordId) {
 // ---------- ปุ่มหลัก ----------
 
 async function handleButton(interaction) {
+  if (await blockIfNotAdmin(interaction)) return;
+
   const id = interaction.customId;
 
   if (id === "ap_onduty") return handleOnDuty(interaction);
@@ -354,6 +382,8 @@ async function handleSelectClearDuty(interaction) {
 }
 
 async function handleUserSelect(interaction) {
+  if (await blockIfNotAdmin(interaction)) return;
+
   const id = interaction.customId;
   const targetId = interaction.values[0];
 
@@ -385,13 +415,38 @@ async function handleSelectRegPosition(interaction) {
   await db.addMember(data);
   await roster.refreshRoster(interaction.client);
 
+  // แจกยศเริ่มต้น (config.autoRoleIds) ให้สมาชิกใหม่ทันที
+  const roleResult = await assignRoles(interaction, pending.discordId, config.autoRoleIds);
+
+  const resultLines = [`เพิ่มสมาชิก ${pending.discordTag} สำเร็จ! ตอนนี้สามารถกดปุ่ม "เข้าเวร" ได้แล้ว`];
+  if (roleResult?.added?.length) {
+    resultLines.push(`แจกยศสำเร็จ: ${roleResult.added.join(" ")}`);
+  }
+  if (roleResult && !roleResult.ok) {
+    resultLines.push(
+      `⚠️ แจกยศไม่สำเร็จบางส่วน/ทั้งหมด (${roleResult.reason || roleResult.failed?.join(", ")}) กรุณาแจกยศด้วยตนเอง`
+    );
+  }
+
   await interaction.editReply({
     content: null,
-    embeds: [embeds.successEmbed(`เพิ่มสมาชิก ${pending.discordTag} สำเร็จ! ตอนนี้สามารถกดปุ่ม "เข้าเวร" ได้แล้ว`)],
+    embeds: [embeds.successEmbed(resultLines.join("\n"))],
     components: [],
   });
 
   await sendLog(interaction.client, "สมัคร", embeds.registerEmbed({ ...data, addedBy: interaction.user.tag }));
+
+  if (roleResult && !roleResult.ok) {
+    await sendLog(
+      interaction.client,
+      "แอดมิน",
+      embeds.errorEmbed(
+        `แจกยศอัตโนมัติให้ <@${pending.discordId}> ตอนเพิ่มสมาชิกไม่สำเร็จบางส่วน/ทั้งหมด กรุณาแจกยศด้วยตนเอง (เหตุผล: ${
+          roleResult.reason || roleResult.failed?.join(", ")
+        })`
+      )
+    );
+  }
 }
 
 async function handleSelectSetPosition(interaction) {
@@ -415,22 +470,79 @@ async function handleSelectSetPosition(interaction) {
   await db.updateMemberPosition(discordId, position);
   await roster.refreshRoster(interaction.client);
 
+  // ถอดยศตำแหน่งเก่า + ใส่ยศตำแหน่งใหม่ ตาม config.positionRoleIds
+  const roleResult = await swapPositionRole(
+    interaction,
+    discordId,
+    existing.position,
+    position,
+    config.positionRoleIds
+  );
+
+  // เปลี่ยนชื่อเล่นในดิสคอร์ดให้ตรงกับตำแหน่งใหม่: "[ตำแหน่ง] ชื่อในเกม"
+  const nicknameResult = await setNickname(interaction, discordId, `[${position}] ${existing.gameName}`);
+
+  const resultLines = [
+    `เปลี่ยนตำแหน่งของ ${existing.gameName} (${existing.discordName}) เป็น "${position}" เรียบร้อยแล้ว`,
+  ];
+  if (roleResult?.removed?.length || roleResult?.added?.length) {
+    const parts = [];
+    if (roleResult.removed.length) parts.push(`ถอด ${roleResult.removed.join(" ")}`);
+    if (roleResult.added.length) parts.push(`ใส่ ${roleResult.added.join(" ")}`);
+    resultLines.push(parts.join(" / "));
+  }
+  if (roleResult && !roleResult.ok) {
+    resultLines.push(
+      `⚠️ เปลี่ยนยศไม่สำเร็จบางส่วน/ทั้งหมด (${roleResult.reason || roleResult.failed?.join(", ")}) กรุณาแก้ยศด้วยตนเอง`
+    );
+  }
+  if (nicknameResult?.ok) {
+    resultLines.push(`เปลี่ยนชื่อเล่นเป็น: ${nicknameResult.nickname}`);
+  } else if (nicknameResult && !nicknameResult.ok) {
+    resultLines.push(`⚠️ เปลี่ยนชื่อเล่นไม่สำเร็จ (${nicknameResult.reason}) กรุณาเปลี่ยนด้วยตนเอง`);
+  }
+
   await interaction.editReply({
     content: null,
-    embeds: [
-      embeds.successEmbed(`เปลี่ยนตำแหน่งของ ${existing.gameName} (${existing.discordName}) เป็น "${position}" เรียบร้อยแล้ว`),
-    ],
+    embeds: [embeds.successEmbed(resultLines.join("\n"))],
     components: [],
   });
+
+  const logFields = [
+    { name: "สมาชิก", value: `${existing.gameName} (${existing.discordName})`, inline: true },
+    { name: "ตำแหน่งเดิม", value: existing.position || "-", inline: true },
+    { name: "ตำแหน่งใหม่", value: position, inline: true },
+  ];
+  if (roleResult?.removed?.length) logFields.push({ name: "ถอดยศ", value: roleResult.removed.join(" "), inline: false });
+  if (roleResult?.added?.length) logFields.push({ name: "ใส่ยศ", value: roleResult.added.join(" "), inline: false });
+  if (nicknameResult?.ok) logFields.push({ name: "เปลี่ยนชื่อเล่น", value: nicknameResult.nickname, inline: false });
 
   await sendLog(
     interaction.client,
     "แอดมิน",
-    embeds.adminActionEmbed("🎖️ เปลี่ยนตำแหน่ง", `แอดมิน ${interaction.user.tag} เปลี่ยนตำแหน่งสมาชิก`, [
-      { name: "สมาชิก", value: `${existing.gameName} (${existing.discordName})`, inline: true },
-      { name: "ตำแหน่งใหม่", value: position, inline: true },
-    ])
+    embeds.adminActionEmbed("🎖️ เปลี่ยนตำแหน่ง", `แอดมิน ${interaction.user.tag} เปลี่ยนตำแหน่งสมาชิก`, logFields)
   );
+
+  if (roleResult && !roleResult.ok) {
+    await sendLog(
+      interaction.client,
+      "แอดมิน",
+      embeds.errorEmbed(
+        `เปลี่ยนยศอัตโนมัติให้ <@${discordId}> ตอนแก้ไขตำแหน่งไม่สำเร็จบางส่วน/ทั้งหมด กรุณาแก้ยศด้วยตนเอง (เหตุผล: ${
+          roleResult.reason || roleResult.failed?.join(", ")
+        })`
+      )
+    );
+  }
+  if (nicknameResult && !nicknameResult.ok) {
+    await sendLog(
+      interaction.client,
+      "แอดมิน",
+      embeds.errorEmbed(
+        `เปลี่ยนชื่อเล่นให้ <@${discordId}> ตอนแก้ไขตำแหน่งไม่สำเร็จ กรุณาเปลี่ยนด้วยตนเอง (เหตุผล: ${nicknameResult.reason})`
+      )
+    );
+  }
 }
 
 async function handleSelectWeeklyHistory(interaction) {
@@ -462,6 +574,8 @@ async function handleSelectWeeklyHistory(interaction) {
 }
 
 async function handleStringSelect(interaction) {
+  if (await blockIfNotAdmin(interaction)) return;
+
   const id = interaction.customId;
   if (id === "ap_select_regposition") return handleSelectRegPosition(interaction);
   if (id === "ap_select_setposition") return handleSelectSetPosition(interaction);
@@ -720,6 +834,8 @@ async function handleRemoveMemberCancel(interaction) {
 }
 
 async function handleModalSubmit(interaction) {
+  if (await blockIfNotAdmin(interaction)) return;
+
   const [action, targetId] = interaction.customId.split(":");
 
   if (action === "ap_modal_addhours") return handleModalAddHours(interaction, targetId);
