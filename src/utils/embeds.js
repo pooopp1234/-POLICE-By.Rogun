@@ -1,4 +1,5 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const config = require("../../config.json");
 
 function registerEmbed({ discordName, gameName, position, addedBy }) {
   const embed = new EmbedBuilder()
@@ -447,16 +448,25 @@ function applicationReviewRow(id, disabled = false) {
   );
 }
 
-function applicationResultEmbed(app) {
+function applicationResultEmbed(app, guildId) {
   const approved = app.status === "อนุมัติ";
+
+  let description;
+  if (approved) {
+    description = `ยินดีต้อนรับเข้าสู่หน่วยงาน **${app.department}**! ตอนนี้คุณสามารถใช้คำสั่ง \`/เข้าเวร\` ได้แล้ว`;
+
+    const channelId = config.dutyChannelId;
+    if (guildId && channelId && !channelId.startsWith("ใส่_")) {
+      description += `\n\nให้ไปเข้าเวรในห้องนี้ด้วยนะจ๊ะ 🟢\nhttps://discord.com/channels/${guildId}/${channelId}`;
+    }
+  } else {
+    description = `ใบสมัครเข้าหน่วยงาน **${app.department}** ของคุณถูกปฏิเสธ ติดต่อแอดมินหากมีข้อสงสัย`;
+  }
+
   return new EmbedBuilder()
     .setColor(approved ? 0x57f287 : 0xed4245)
     .setTitle(approved ? "✅ ใบสมัครของคุณได้รับการอนุมัติ" : "❌ ใบสมัครของคุณถูกปฏิเสธ")
-    .setDescription(
-      approved
-        ? `ยินดีต้อนรับเข้าสู่หน่วยงาน **${app.department}**! ตอนนี้คุณสามารถใช้คำสั่ง \`/เข้าเวร\` ได้แล้ว`
-        : `ใบสมัครเข้าหน่วยงาน **${app.department}** ของคุณถูกปฏิเสธ ติดต่อแอดมินหากมีข้อสงสัย`
-    )
+    .setDescription(description)
     .setFooter({ text: `Application #${app.id}` })
     .setTimestamp();
 }
