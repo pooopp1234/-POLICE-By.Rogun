@@ -78,7 +78,7 @@ function checkInLogEmbed({ discordUser, gameName, position, time }) {
       { name: "ตำแหน่ง", value: position || "-", inline: true },
       { name: "เวลาเข้าเวร", value: time, inline: true }
     )
-    .setFooter({ text: "POLICE CASE SYSTEM • Duty System" })
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Duty System" })
     .setTimestamp();
 
   if (discordUser) embed.setThumbnail(discordUser.displayAvatarURL());
@@ -96,7 +96,7 @@ function checkOutLogEmbed({ discordUser, gameName, position, checkIn, checkOut, 
       { name: "เวลาออก", value: checkOut, inline: true },
       { name: "รวมชั่วโมง", value: `${hours} ชม.`, inline: true }
     )
-    .setFooter({ text: "POLICE CASE SYSTEM • Duty System" })
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Duty System" })
     .setTimestamp();
 
   if (discordUser) embed.setThumbnail(discordUser.displayAvatarURL());
@@ -135,7 +135,7 @@ function dutyPanelEmbeds(onDutyList = []) {
 
   const headerEmbed = new EmbedBuilder()
     .setColor(0x5865f2)
-    .setTitle("🚓 ระบบลงเวลาเข้าเวร");
+    .setTitle("🚑 ระบบลงเวลาเข้าเวร");
 
   const infoEmbed = new EmbedBuilder()
     .setColor(0x5865f2)
@@ -149,7 +149,7 @@ function dutyPanelEmbeds(onDutyList = []) {
   const statusEmbed = new EmbedBuilder()
     .setColor(statusColor)
     .setDescription(`${statusDot} **กำลังเข้าเวร (${count} คน)**\n${listText}`)
-    .setFooter({ text: "POLICE CASE SYSTEM • Duty System" })
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Duty System" })
     .setTimestamp();
 
   return [headerEmbed, infoEmbed, statusEmbed];
@@ -298,7 +298,7 @@ function queueEmbed({ ready = [], onCase = [], onBreak = [], loop = [] }) {
   return new EmbedBuilder()
     .setColor(0x5865f2)
     .setDescription(lines.join("\n"))
-    .setFooter({ text: "POLICE CASE SYSTEM • Queue System" })
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Queue System" })
     .setTimestamp();
 }
 
@@ -329,7 +329,7 @@ function plateSubmitPanelEmbeds() {
   const infoEmbed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setDescription("กดปุ่มด้านล่างเพื่อลงทะเบียนป้ายทะเบียนรถคันใหม่ (เลขทะเบียน + ชื่อเจ้าของ/ผู้ขับ)")
-    .setFooter({ text: "POLICE CASE SYSTEM • Plate Registration" })
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Plate Registration" })
     .setTimestamp();
 
   return [headerEmbed, infoEmbed];
@@ -376,6 +376,91 @@ function plateListEmbeds(plates, updatedAtText) {
   return chunks.slice(0, 10).map((desc) => new EmbedBuilder().setColor(0x5865f2).setDescription(desc));
 }
 
+// ---------- ระบบใบสมัคร (สมัครเข้าหน่วยงานผ่านปุ่ม + ห้องผู้อนุมัติ) ----------
+
+function applicationMenuEmbed(departments) {
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle("📝 ใบสมัครเข้าหน่วยงาน")
+    .setDescription(
+      `กดปุ่มด้านล่างเพื่อเลือกหน่วยงานที่ต้องการสมัคร แล้วกรอกแบบฟอร์มใบสมัคร\n\nหน่วยงานที่เปิดรับ: ${departments
+        .map((d) => `\`${d}\``)
+        .join(" ")}`
+    )
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Application" })
+    .setTimestamp();
+}
+
+function applicationMenuRow(departments) {
+  const row = new ActionRowBuilder();
+  for (const dept of departments.slice(0, 5)) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(`form_apply_${dept}`)
+        .setLabel(`สมัคร ${dept}`)
+        .setEmoji("📝")
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  return row;
+}
+
+function applicationReviewEmbed(app, reviewerTag) {
+  const isPending = app.status === "รอตรวจสอบ";
+  const approved = app.status === "อนุมัติ";
+
+  const embed = new EmbedBuilder()
+    .setColor(isPending ? 0xfee75c : approved ? 0x57f287 : 0xed4245)
+    .setTitle(isPending ? "📥 ใบสมัครใหม่ — รอตรวจสอบ" : approved ? "✅ ใบสมัคร — อนุมัติแล้ว" : "❌ ใบสมัคร — ปฏิเสธแล้ว")
+    .setDescription(`<@${app.discordId}> ส่งใบสมัครเข้าหน่วยงาน **${app.department}**`)
+    .addFields(
+      { name: "ชื่อในเกม", value: app.gameName, inline: true },
+      { name: "หน่วยงาน", value: app.department, inline: true },
+      { name: "Discord", value: app.discordName, inline: true },
+      { name: "เหตุผลที่อยากเข้าร่วม", value: app.reason || "-", inline: false },
+      { name: "ประสบการณ์ / ข้อมูลเพิ่มเติม", value: app.experience || "-", inline: false }
+    )
+    .setFooter({ text: `Application #${app.id}` })
+    .setTimestamp();
+
+  if (!isPending && reviewerTag) {
+    embed.addFields({ name: approved ? "อนุมัติโดย" : "ปฏิเสธโดย", value: reviewerTag, inline: false });
+  }
+
+  return embed;
+}
+
+function applicationReviewRow(id, disabled = false) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`form_approve_${id}`)
+      .setLabel("อนุมัติ")
+      .setEmoji("✅")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId(`form_reject_${id}`)
+      .setLabel("ปฏิเสธ")
+      .setEmoji("❌")
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(disabled)
+  );
+}
+
+function applicationResultEmbed(app) {
+  const approved = app.status === "อนุมัติ";
+  return new EmbedBuilder()
+    .setColor(approved ? 0x57f287 : 0xed4245)
+    .setTitle(approved ? "✅ ใบสมัครของคุณได้รับการอนุมัติ" : "❌ ใบสมัครของคุณถูกปฏิเสธ")
+    .setDescription(
+      approved
+        ? `ยินดีต้อนรับเข้าสู่หน่วยงาน **${app.department}**! ตอนนี้คุณสามารถใช้คำสั่ง \`/เข้าเวร\` ได้แล้ว`
+        : `ใบสมัครเข้าหน่วยงาน **${app.department}** ของคุณถูกปฏิเสธ ติดต่อแอดมินหากมีข้อสงสัย`
+    )
+    .setFooter({ text: `Application #${app.id}` })
+    .setTimestamp();
+}
+
 module.exports = {
   registerEmbed,
   checkInEmbed,
@@ -395,4 +480,9 @@ module.exports = {
   plateSubmitPanelEmbeds,
   plateSubmitRow,
   plateListEmbeds,
+  applicationMenuEmbed,
+  applicationMenuRow,
+  applicationReviewEmbed,
+  applicationReviewRow,
+  applicationResultEmbed,
 };

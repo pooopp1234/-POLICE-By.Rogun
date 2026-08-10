@@ -117,6 +117,26 @@ const SCHEMA_STATEMENTS = [
     channel_id TEXT,
     message_id TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS application_panel (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    channel_id TEXT,
+    message_id TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS applications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    discord_id TEXT,
+    discord_name TEXT,
+    department TEXT,
+    game_name TEXT,
+    reason TEXT,
+    experience TEXT,
+    status TEXT,
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    review_channel_id TEXT,
+    review_message_id TEXT,
+    created_at TEXT
+  )`,
 ];
 
 const ready = (async () => {
@@ -385,6 +405,24 @@ async function setPanelMessage(channelId, messageId) {
   await ready;
   await client.execute({
     sql: `INSERT INTO duty_panel (id, channel_id, message_id) VALUES (1, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET channel_id = excluded.channel_id, message_id = excluded.message_id`,
+    args: [channelId, messageId],
+  });
+}
+
+// ---------- Application Panel (ปุ่มสมัครเข้าหน่วยงานแบบข้อความปักหมุด) ----------
+
+async function getApplicationPanel() {
+  await ready;
+  const { rows } = await client.execute("SELECT channel_id, message_id FROM application_panel WHERE id = 1");
+  if (!rows[0]) return null;
+  return { channelId: rows[0].channel_id, messageId: rows[0].message_id };
+}
+
+async function setApplicationPanel(channelId, messageId) {
+  await ready;
+  await client.execute({
+    sql: `INSERT INTO application_panel (id, channel_id, message_id) VALUES (1, ?, ?)
           ON CONFLICT(id) DO UPDATE SET channel_id = excluded.channel_id, message_id = excluded.message_id`,
     args: [channelId, messageId],
   });
@@ -741,6 +779,82 @@ async function setQueuePanel(channelId, messageId) {
   });
 }
 
+// ---------- ระบบใบสมัคร (สมัครเข้าหน่วยงาน ผ่านปุ่ม + ห้องผู้อนุมัติ) ----------
+
+function rowToApplication(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    discordId: row.discord_id,
+    discordName: row.discord_name,
+    department: row.department,
+    gameName: row.game_name,
+    reason: row.reason,
+    experience: row.experience,
+    status: row.status,
+    reviewedBy: row.reviewed_by,
+    reviewedAt: row.reviewed_at,
+    reviewChannelId: row.review_channel_id,
+    reviewMessageId: row.review_message_id,
+    createdAt: row.created_at,
+  };
+}
+
+async function findPendingApplication(discordId) {
+  await ready;
+  const { rows } = await client.execute({
+    sql: "SELECT * FROM applications WHERE discord_id = ? AND status = 'รอตรวจสอบ' LIMIT 1",
+    args: [discordId],
+  });
+  return rowToApplication(rows[0]);
+}
+
+async function addApplication(entry) {
+  await ready;
+  const result = await client.execute({
+    sql: `INSERT INTO applications (discord_id, discord_name, department, game_name, reason, experience, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, 'รอตรวจสอบ', ?)`,
+    args: [
+      entry.discordId,
+      entry.discordName,
+      entry.department,
+      entry.gameName,
+      entry.reason,
+      entry.experience ?? null,
+      entry.createdAt,
+    ],
+  });
+  return getApplication(Number(result.lastInsertRowid));
+}
+
+async function getApplication(id) {
+  await ready;
+  const { rows } = await client.execute({
+    sql: "SELECT * FROM applications WHERE id = ?",
+    args: [id],
+  });
+  return rowToApplication(rows[0]);
+}
+
+async function setApplicationReviewMessage(id, channelId, messageId) {
+  await ready;
+  await client.execute({
+    sql: "UPDATE applications SET review_channel_id = ?, review_message_id = ? WHERE id = ?",
+    args: [channelId, messageId, id],
+  });
+}
+
+/** อัปเดตผลการพิจารณา คืนค่า null ถ้าใบสมัครนี้ถูกตัดสินไปแล้ว (กันกดซ้ำ) */
+async function decideApplication(id, status, reviewerId, reviewedAt) {
+  await ready;
+  const result = await client.execute({
+    sql: "UPDATE applications SET status = ?, reviewed_by = ?, reviewed_at = ? WHERE id = ? AND status = 'รอตรวจสอบ'",
+    args: [status, reviewerId, reviewedAt, id],
+  });
+  if (Number(result.rowsAffected) === 0) return null;
+  return getApplication(id);
+}
+
 module.exports = {
   findMember,
   addMember,
@@ -759,6 +873,8 @@ module.exports = {
   exportAllCsv,
   getPanelMessage,
   setPanelMessage,
+  getApplicationPanel,
+  setApplicationPanel,
   getRosterPanel,
   setRosterPanel,
   getState,
@@ -789,4 +905,9 @@ module.exports = {
   setPlatePanel,
   getPlateListPanel,
   setPlateListPanel,
+  findPendingApplication,
+  addApplication,
+  getApplication,
+  setApplicationReviewMessage,
+  decideApplication,
 };

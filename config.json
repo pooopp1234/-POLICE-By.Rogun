@@ -1,6 +1,6 @@
 {
   "adminRoleIds": [
-    "1532468585258025100"
+    "1535722077884121179"
   ],
   "logChannels": {
     "สมัคร": "ใส่_CHANNEL_ID",
@@ -9,9 +9,15 @@
     "แอดมิน": "ใส่_CHANNEL_ID",
     "สรุปสัปดาห์": "1532717936299606166",
     "คิว": "ใส่_CHANNEL_ID",
-    "ทะเบียน": "ใส่_CHANNEL_ID"
+    "ทะเบียน": "ใส่_CHANNEL_ID",
+    "ใบสมัคร": "ใส่_CHANNEL_ID"
   },
-  "departments": ["EMS", "POLICE", "MECHANIC"],
+  "applicationChannelId": "ใส่_CHANNEL_ID",
+  "autoRoleIds": [
+    "ใส่_ROLE_ID_1",
+    "ใส่_ROLE_ID_2"
+  ],
+  "departments": ["แพทย์"],
   "positions": [
     "ผู้อำนวยการเเพทย์",
     "รองผู้อำนวยการเเพทย",

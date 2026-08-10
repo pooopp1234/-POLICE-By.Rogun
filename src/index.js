@@ -5,12 +5,14 @@ const { Client, GatewayIntentBits, Collection } = require("discord.js");
 const embeds = require("./utils/embeds");
 const dutyActions = require("./utils/dutyActions");
 const panel = require("./utils/panel");
+const applicationPanel = require("./utils/applicationPanel");
 const weeklyReset = require("./utils/weeklyReset");
 const queue = require("./utils/queue");
 const { sendLog } = require("./utils/permissions");
 const adminPanelHandler = require("./handlers/adminPanelHandler");
 const queueHandler = require("./handlers/queueHandler");
 const plateHandler = require("./handlers/plateHandler");
+const applicationHandler = require("./handlers/applicationHandler");
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
@@ -39,6 +41,7 @@ client.once("ready", async () => {
   console.log(`โหลดคำสั่งทั้งหมด ${client.commands.size} คำสั่ง`);
   await panel.refreshPanel(client); // ซิงก์แผงเข้าเวรที่ปักไว้ให้ตรงกับสถานะล่าสุดหลังบอทรีสตาร์ท
   await queue.refreshQueuePanel(client); // ซิงก์แผงคิวแพทย์ที่ปักไว้เช่นกัน
+  await applicationPanel.refreshApplicationPanel(client); // ซิงก์แผงสมัครที่ปักไว้ให้ตรงกับ config ล่าสุด
   weeklyReset.start(client); // เริ่มระบบสรุป + รีเซ็ตชั่วโมงเวรรายสัปดาห์อัตโนมัติ
   queue.start(client); // เริ่มระบบเช็คคนพักหมดเวลาในคิวแพทย์อัตโนมัติ
 });
@@ -122,6 +125,16 @@ client.on("interactionCreate", async (interaction) => {
         console.error(`เกิดข้อผิดพลาดในระบบป้ายทะเบียน (ปุ่ม ${interaction.customId}):`, err);
         await safeErrorReply(interaction);
       }
+      return;
+    }
+
+    if (interaction.customId.startsWith("form_")) {
+      try {
+        await applicationHandler.handleButton(interaction);
+      } catch (err) {
+        console.error(`เกิดข้อผิดพลาดในระบบใบสมัคร (ปุ่ม ${interaction.customId}):`, err);
+        await safeErrorReply(interaction);
+      }
     }
     return;
   }
@@ -171,6 +184,16 @@ client.on("interactionCreate", async (interaction) => {
       await plateHandler.handleModalSubmit(interaction);
     } catch (err) {
       console.error(`เกิดข้อผิดพลาดในระบบป้ายทะเบียน (modal ${interaction.customId}):`, err);
+      await safeErrorReply(interaction);
+    }
+    return;
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId.startsWith("form_modal_")) {
+    try {
+      await applicationHandler.handleModalSubmit(interaction);
+    } catch (err) {
+      console.error(`เกิดข้อผิดพลาดในระบบใบสมัคร (modal ${interaction.customId}):`, err);
       await safeErrorReply(interaction);
     }
     return;

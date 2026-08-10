@@ -16,7 +16,7 @@ function adminPanelEmbed() {
         "**จัดการสมาชิก:** 🆕 เพิ่มสมาชิก / 🎖️ แก้ไขตำแหน่ง / 🗑️ ลบสมาชิก\n" +
         "**ระบบรายสัปดาห์:** ▶️ สรุปสัปดาห์ทันที / 📜 ประวัติสัปดาห์ก่อนหน้า"
     )
-    .setFooter({ text: "POLICE CASE SYSTEM • Admin Panel" })
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Admin Panel" })
     .setTimestamp();
 }
 
