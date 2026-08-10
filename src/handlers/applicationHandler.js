@@ -289,7 +289,7 @@ async function handleDecision(interaction) {
 
   try {
     const applicant = await interaction.client.users.fetch(application.discordId);
-    await applicant.send({ embeds: [embeds.applicationResultEmbed(application)] });
+    await applicant.send({ embeds: [embeds.applicationResultEmbed(application, interaction.guildId)] });
   } catch (err) {
     console.error(`ส่ง DM แจ้งผลใบสมัคร #${application.id} ไม่สำเร็จ (อาจปิดรับ DM):`, err.message);
   }
