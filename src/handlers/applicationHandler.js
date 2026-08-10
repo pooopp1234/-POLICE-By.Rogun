@@ -105,6 +105,9 @@ async function handleModalSubmit(interaction) {
     createdAt: time.nowIso(),
   });
 
+  // เปลี่ยนชื่อเล่นในดิสคอร์ดเป็นชื่อในเกมทันทีที่ยื่นใบสมัคร (ถ้าเปลี่ยนไม่สำเร็จจะไม่ทำให้การสมัครล้มเหลว)
+  const nicknameResult = await setNickname(interaction, interaction.user.id, gameName);
+
   const channelId = config.applicationChannelId;
   let posted = false;
 
@@ -142,6 +145,44 @@ async function handleModalSubmit(interaction) {
       { name: "หน่วยงาน", value: department, inline: true },
     ])
   );
+
+  // ถ้าเปลี่ยนชื่อเล่นไม่สำเร็จ แจ้งเตือนห้อง log แอดมิน
+  if (!nicknameResult.ok) {
+    await sendLog(
+      interaction.client,
+      "แอดมิน",
+      embeds.errorEmbed(
+        `เปลี่ยนชื่อเล่นให้ <@${interaction.user.id}> ตอนยื่นใบสมัคร #${application.id} ไม่สำเร็จ (เหตุผล: ${nicknameResult.reason})`
+      )
+    );
+  }
+}
+
+// เปลี่ยนชื่อเล่น (Nickname) ในดิสคอร์ดให้ผู้สมัคร
+// ใช้ทั้งตอนยื่นใบสมัคร (เปลี่ยนเป็นชื่อในเกมอย่างเดียว) และตอนอนุมัติ (เปลี่ยนเป็น "[ตำแหน่ง] ชื่อในเกม")
+async function setNickname(interaction, discordId, nickname) {
+  try {
+    const guild = interaction.guild;
+    if (!guild) return { ok: false, reason: "ไม่พบเซิร์ฟเวอร์ (ใช้นอกกิลด์)" };
+
+    const member = await guild.members.fetch(discordId).catch(() => null);
+    if (!member) {
+      return { ok: false, reason: "ผู้สมัครไม่ได้อยู่ในเซิร์ฟเวอร์แล้ว จึงเปลี่ยนชื่อไม่ได้" };
+    }
+
+    // Discord ห้ามบอทเปลี่ยนชื่อเล่นของเจ้าของเซิร์ฟเวอร์ (Server Owner) ไม่ว่ากรณีใด
+    if (guild.ownerId === discordId) {
+      return { ok: false, reason: "ไม่สามารถเปลี่ยนชื่อเล่นของเจ้าของเซิร์ฟเวอร์ได้ (ข้อจำกัดของ Discord)" };
+    }
+
+    const trimmed = nickname.slice(0, 32); // ดิสคอร์ดจำกัดชื่อเล่นไม่เกิน 32 ตัวอักษร
+    await member.setNickname(trimmed);
+    return { ok: true, nickname: trimmed };
+  } catch (err) {
+    // เกิดได้บ่อยตอนยศของบอทอยู่ต่ำกว่ายศสูงสุดของสมาชิกคนนั้น หรือบอทไม่มีสิทธิ์ Manage Nicknames
+    console.error(`เปลี่ยนชื่อเล่นให้ ${discordId} ไม่สำเร็จ:`, err.message);
+    return { ok: false, reason: err.message };
+  }
 }
 
 // แจกยศ (Role) ในดิสคอร์ดให้ผู้สมัครทันทีที่ได้รับการอนุมัติ
@@ -213,6 +254,7 @@ async function handleDecision(interaction) {
   });
 
   let roleResult = null; // null = ไม่ได้พยายามแจกยศ (ไม่ใช่การอนุมัติครั้งแรก หรือไม่ได้ตั้งค่า)
+  let approveNicknameResult = null;
 
   if (approve) {
     const alreadyMember = await db.findMember(application.discordId);
@@ -235,6 +277,13 @@ async function handleDecision(interaction) {
       }
 
       roleResult = await assignAutoRoles(interaction, application.discordId);
+
+      // เปลี่ยนชื่อเล่นเป็นรูปแบบสมาชิกจริง: "[ตำแหน่ง] ชื่อในเกม"
+      approveNicknameResult = await setNickname(
+        interaction,
+        application.discordId,
+        `[${defaultPosition}] ${application.gameName}`
+      );
     }
   }
 
@@ -262,6 +311,10 @@ async function handleDecision(interaction) {
     }
   }
 
+  if (approveNicknameResult?.ok) {
+    logFields.push({ name: "เปลี่ยนชื่อเล่นสำเร็จ", value: approveNicknameResult.nickname, inline: false });
+  }
+
   await sendLog(
     interaction.client,
     "ใบสมัคร",
@@ -281,6 +334,17 @@ async function handleDecision(interaction) {
         `แจกยศอัตโนมัติให้ <@${application.discordId}> ไม่สำเร็จบางส่วน/ทั้งหมด กรุณาแจกยศด้วยตนเอง (เหตุผล: ${
           roleResult.reason || roleResult.failed?.join(", ")
         })`
+      )
+    );
+  }
+
+  // ถ้าเปลี่ยนชื่อเล่นตอนอนุมัติไม่สำเร็จ ให้แจ้งเตือนห้อง log แอดมินเช่นกัน
+  if (approveNicknameResult && !approveNicknameResult.ok) {
+    await sendLog(
+      interaction.client,
+      "แอดมิน",
+      embeds.errorEmbed(
+        `เปลี่ยนชื่อเล่นให้ <@${application.discordId}> ตอนอนุมัติไม่สำเร็จ กรุณาเปลี่ยนด้วยตนเอง (เหตุผล: ${approveNicknameResult.reason})`
       )
     );
   }
