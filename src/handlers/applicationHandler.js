@@ -4,6 +4,7 @@ const time = require("../utils/time");
 const embeds = require("../utils/embeds");
 const config = require("../../config.json");
 const { isAdmin, sendLog } = require("../utils/permissions");
+const { setNickname, assignRoles } = require("../utils/discordSync");
 
 function applicationModal(department) {
   const modal = new ModalBuilder()
@@ -158,73 +159,6 @@ async function handleModalSubmit(interaction) {
   }
 }
 
-// เปลี่ยนชื่อเล่น (Nickname) ในดิสคอร์ดให้ผู้สมัคร
-// ใช้ทั้งตอนยื่นใบสมัคร (เปลี่ยนเป็นชื่อในเกมอย่างเดียว) และตอนอนุมัติ (เปลี่ยนเป็น "[ตำแหน่ง] ชื่อในเกม")
-async function setNickname(interaction, discordId, nickname) {
-  try {
-    const guild = interaction.guild;
-    if (!guild) return { ok: false, reason: "ไม่พบเซิร์ฟเวอร์ (ใช้นอกกิลด์)" };
-
-    const member = await guild.members.fetch(discordId).catch(() => null);
-    if (!member) {
-      return { ok: false, reason: "ผู้สมัครไม่ได้อยู่ในเซิร์ฟเวอร์แล้ว จึงเปลี่ยนชื่อไม่ได้" };
-    }
-
-    // Discord ห้ามบอทเปลี่ยนชื่อเล่นของเจ้าของเซิร์ฟเวอร์ (Server Owner) ไม่ว่ากรณีใด
-    if (guild.ownerId === discordId) {
-      return { ok: false, reason: "ไม่สามารถเปลี่ยนชื่อเล่นของเจ้าของเซิร์ฟเวอร์ได้ (ข้อจำกัดของ Discord)" };
-    }
-
-    const trimmed = nickname.slice(0, 32); // ดิสคอร์ดจำกัดชื่อเล่นไม่เกิน 32 ตัวอักษร
-    await member.setNickname(trimmed);
-    return { ok: true, nickname: trimmed };
-  } catch (err) {
-    // เกิดได้บ่อยตอนยศของบอทอยู่ต่ำกว่ายศสูงสุดของสมาชิกคนนั้น หรือบอทไม่มีสิทธิ์ Manage Nicknames
-    console.error(`เปลี่ยนชื่อเล่นให้ ${discordId} ไม่สำเร็จ:`, err.message);
-    return { ok: false, reason: err.message };
-  }
-}
-
-// แจกยศ (Role) ในดิสคอร์ดให้ผู้สมัครทันทีที่ได้รับการอนุมัติ
-// อ่านรายชื่อยศจาก config.autoRoleIds (ตั้งได้กี่ยศก็ได้ ไม่จำกัดแค่ 2)
-async function assignAutoRoles(interaction, discordId) {
-  const roleIds = (config.autoRoleIds || []).filter((id) => id && !id.startsWith("ใส่_"));
-  if (roleIds.length === 0) return null; // ยังไม่ได้ตั้งค่า ข้ามไปเงียบๆ
-
-  try {
-    const guild = interaction.guild;
-    if (!guild) return { ok: false, reason: "ไม่พบเซิร์ฟเวอร์ (ใช้นอกกิลด์)" };
-
-    const member = await guild.members.fetch(discordId).catch(() => null);
-    if (!member) {
-      return { ok: false, reason: "ผู้สมัครไม่ได้อยู่ในเซิร์ฟเวอร์แล้ว จึงแจกยศไม่ได้" };
-    }
-
-    const added = [];
-    const failed = [];
-
-    for (const roleId of roleIds) {
-      try {
-        const role = await guild.roles.fetch(roleId).catch(() => null);
-        if (!role) {
-          failed.push(`\`${roleId}\` (ไม่พบยศนี้)`);
-          continue;
-        }
-        await member.roles.add(role);
-        added.push(`<@&${roleId}>`);
-      } catch (err) {
-        // เกิดได้บ่อยตอนยศของบอทอยู่ต่ำกว่ายศเป้าหมาย หรือบอทไม่มีสิทธิ์ Manage Roles
-        failed.push(`<@&${roleId}> (${err.message})`);
-      }
-    }
-
-    return { ok: failed.length === 0, added, failed };
-  } catch (err) {
-    console.error(`แจกยศอัตโนมัติให้ ${discordId} ไม่สำเร็จ:`, err.message);
-    return { ok: false, reason: err.message };
-  }
-}
-
 async function handleDecision(interaction) {
   if (!isAdmin(interaction)) {
     return interaction.reply({
@@ -276,7 +210,7 @@ async function handleDecision(interaction) {
         console.error("อัปเดตห้องรายชื่อหลังอนุมัติใบสมัครไม่สำเร็จ:", err.message);
       }
 
-      roleResult = await assignAutoRoles(interaction, application.discordId);
+      roleResult = await assignRoles(interaction, application.discordId, config.autoRoleIds);
 
       // เปลี่ยนชื่อเล่นเป็นรูปแบบสมาชิกจริง: "[ตำแหน่ง] ชื่อในเกม"
       approveNicknameResult = await setNickname(
