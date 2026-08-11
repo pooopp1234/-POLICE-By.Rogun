@@ -1,8 +1,1 @@
-# Node.js project dependencies
-# Install with npm: npm install
-
-discord.js@^14.15.3
-dotenv@^16.4.5
-dayjs@^1.11.11
-
-# Requires Node.js >= 22.5.0
+3..
