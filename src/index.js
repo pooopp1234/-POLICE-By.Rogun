@@ -211,6 +211,7 @@ async function safeErrorReply(interaction) {
 
 // เปิด HTTP server เล็กๆ เพื่อให้ Render มองเห็นพอร์ตเปิดอยู่ (จำเป็นสำหรับ Web Service)
 const http = require("node:http");
+const https = require("node:https");
 const PORT = process.env.PORT || 3000;
 http
   .createServer((req, res) => {
@@ -226,9 +227,13 @@ const SELF_PING_URL = process.env.RENDER_EXTERNAL_URL || "https://police-by-rogu
 const SELF_PING_INTERVAL_MS = 4 * 60 * 1000; // 4 นาที
 
 function pingSelf() {
-  http
+  // เลือกใช้ http หรือ https module ให้ตรงกับ protocol ของ URL จริง
+  // ป้องกัน ERR_INVALID_PROTOCOL ตอน SELF_PING_URL เป็น https:// (ค่า default ของ Render)
+  const client = SELF_PING_URL.startsWith("https:") ? https : http;
+  client
     .get(SELF_PING_URL, (res) => {
       console.log(`[Self-Ping] ปิงตัวเองสำเร็จ - สถานะ ${res.statusCode}`);
+      res.resume(); // consume response body กัน socket ค้าง
     })
     .on("error", (err) => {
       console.error("[Self-Ping] ปิงไม่สำเร็จ:", err.message);
