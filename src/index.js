@@ -219,4 +219,23 @@ http
   })
   .listen(PORT, () => console.log(`HTTP keep-alive server listening on port ${PORT}`));
 
+// ===== Self-Ping: บอทปิงตัวเองทุก 4 นาที กัน Render สั่ง sleep =====
+// ใส่ URL จริงของบอทใน Environment Variable ชื่อ RENDER_EXTERNAL_URL บน Render
+// (หรือแก้ค่า default ด้านล่างให้ตรงกับ URL จริงของคุณ)
+const SELF_PING_URL = process.env.RENDER_EXTERNAL_URL || "https://police-by-rogun.onrender.com";
+const SELF_PING_INTERVAL_MS = 4 * 60 * 1000; // 4 นาที
+
+function pingSelf() {
+  http
+    .get(SELF_PING_URL, (res) => {
+      console.log(`[Self-Ping] ปิงตัวเองสำเร็จ - สถานะ ${res.statusCode}`);
+    })
+    .on("error", (err) => {
+      console.error("[Self-Ping] ปิงไม่สำเร็จ:", err.message);
+    });
+}
+
+setInterval(pingSelf, SELF_PING_INTERVAL_MS);
+// ==================================================================
+
 client.login(process.env.DISCORD_TOKEN);
