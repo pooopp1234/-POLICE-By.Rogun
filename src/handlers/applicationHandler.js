@@ -11,28 +11,43 @@ function applicationModal(department) {
     .setCustomId(`form_modal_${department}`)
     .setTitle(`ใบสมัคร ${department}`.slice(0, 45));
 
-  const gameNameInput = new TextInputBuilder()
-    .setCustomId("gameName")
-    .setLabel("ชื่อในเกม")
+  const nameInput = new TextInputBuilder()
+    .setCustomId("name")
+    .setLabel("ชื่อ")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
-  const reasonInput = new TextInputBuilder()
-    .setCustomId("reason")
-    .setLabel("เหตุผลที่อยากเข้าร่วมหน่วยงานนี้")
-    .setStyle(TextInputStyle.Paragraph)
+  const ageInput = new TextInputBuilder()
+    .setCustomId("age")
+    .setLabel("อายุ")
+    .setStyle(TextInputStyle.Short)
+    .setMaxLength(3)
     .setRequired(true);
 
-  const experienceInput = new TextInputBuilder()
-    .setCustomId("experience")
-    .setLabel("ประสบการณ์ / ข้อมูลเพิ่มเติม (ถ้ามี)")
-    .setStyle(TextInputStyle.Paragraph)
-    .setRequired(false);
+  const phoneInput = new TextInputBuilder()
+    .setCustomId("phone")
+    .setLabel("เบอร์ในเมือง")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
+
+  const examinerInput = new TextInputBuilder()
+    .setCustomId("examinerName")
+    .setLabel("ชื่อผู้คุมสอบ")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
+
+  const steamLinkInput = new TextInputBuilder()
+    .setCustomId("steamLink")
+    .setLabel("ลิงค์ Steam")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
 
   modal.addComponents(
-    new ActionRowBuilder().addComponents(gameNameInput),
-    new ActionRowBuilder().addComponents(reasonInput),
-    new ActionRowBuilder().addComponents(experienceInput)
+    new ActionRowBuilder().addComponents(nameInput),
+    new ActionRowBuilder().addComponents(ageInput),
+    new ActionRowBuilder().addComponents(phoneInput),
+    new ActionRowBuilder().addComponents(examinerInput),
+    new ActionRowBuilder().addComponents(steamLinkInput)
   );
   return modal;
 }
@@ -69,11 +84,13 @@ async function handleModalSubmit(interaction) {
   if (!interaction.customId.startsWith("form_modal_")) return;
 
   const department = interaction.customId.slice("form_modal_".length);
-  const gameName = interaction.fields.getTextInputValue("gameName").trim();
-  const reason = interaction.fields.getTextInputValue("reason").trim();
-  const experience = interaction.fields.getTextInputValue("experience")?.trim() || null;
+  const gameName = interaction.fields.getTextInputValue("name").trim();
+  const age = interaction.fields.getTextInputValue("age").trim();
+  const phone = interaction.fields.getTextInputValue("phone").trim();
+  const examinerName = interaction.fields.getTextInputValue("examinerName").trim();
+  const steamLink = interaction.fields.getTextInputValue("steamLink").trim();
 
-  if (!gameName || !reason) {
+  if (!gameName || !age || !phone || !examinerName || !steamLink) {
     return interaction.reply({
       embeds: [embeds.errorEmbed("กรุณากรอกข้อมูลให้ครบถ้วน")],
       flags: MessageFlags.Ephemeral,
@@ -101,8 +118,10 @@ async function handleModalSubmit(interaction) {
     discordName: interaction.user.tag,
     department,
     gameName,
-    reason,
-    experience,
+    age,
+    phone,
+    examinerName,
+    steamLink,
     createdAt: time.nowIso(),
   });
 
@@ -142,7 +161,11 @@ async function handleModalSubmit(interaction) {
     interaction.client,
     "ใบสมัคร",
     embeds.adminActionEmbed("📝 ใบสมัครใหม่", `${interaction.user.tag} ส่งใบสมัครเข้าหน่วยงาน ${department}`, [
-      { name: "ชื่อในเกม", value: gameName, inline: true },
+      { name: "ชื่อ", value: gameName, inline: true },
+      { name: "อายุ", value: age, inline: true },
+      { name: "เบอร์ในเมือง", value: phone, inline: true },
+      { name: "ชื่อผู้คุมสอบ", value: examinerName, inline: true },
+      { name: "ลิงค์ Steam", value: steamLink, inline: true },
       { name: "หน่วยงาน", value: department, inline: true },
     ])
   );
@@ -230,7 +253,11 @@ async function handleDecision(interaction) {
 
   const logFields = [
     { name: "หน่วยงาน", value: application.department, inline: true },
-    { name: "ชื่อในเกม", value: application.gameName, inline: true },
+    { name: "ชื่อ", value: application.gameName, inline: true },
+    { name: "อายุ", value: application.age, inline: true },
+    { name: "เบอร์ในเมือง", value: application.phone, inline: true },
+    { name: "ชื่อผู้คุมสอบ", value: application.examinerName, inline: true },
+    { name: "ลิงค์ Steam", value: application.steamLink, inline: true },
   ];
 
   if (roleResult) {

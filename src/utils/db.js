@@ -128,8 +128,10 @@ const SCHEMA_STATEMENTS = [
     discord_name TEXT,
     department TEXT,
     game_name TEXT,
-    reason TEXT,
-    experience TEXT,
+    age TEXT,
+    phone TEXT,
+    examiner_name TEXT,
+    steam_link TEXT,
     status TEXT,
     reviewed_by TEXT,
     reviewed_at TEXT,
@@ -139,12 +141,31 @@ const SCHEMA_STATEMENTS = [
   )`,
 ];
 
+// รายการคอลัมน์ที่อาจต้องเพิ่มเข้า applications ถ้าฐานข้อมูลเดิมถูกสร้างไว้ก่อนที่จะมีฟิลด์เหล่านี้
+const APPLICATIONS_MIGRATION_COLUMNS = [
+  { name: "age", ddl: "ALTER TABLE applications ADD COLUMN age TEXT" },
+  { name: "phone", ddl: "ALTER TABLE applications ADD COLUMN phone TEXT" },
+  { name: "examiner_name", ddl: "ALTER TABLE applications ADD COLUMN examiner_name TEXT" },
+  { name: "steam_link", ddl: "ALTER TABLE applications ADD COLUMN steam_link TEXT" },
+];
+
 const ready = (async () => {
   if (!TURSO_URL) {
     await client.execute("PRAGMA journal_mode = WAL;");
   }
   for (const stmt of SCHEMA_STATEMENTS) {
     await client.execute(stmt);
+  }
+  // เผื่อฐานข้อมูลเดิมถูกสร้างไว้ก่อนมีคอลัมน์ใหม่ (age, phone, examiner_name) ให้เพิ่มให้อัตโนมัติ
+  for (const column of APPLICATIONS_MIGRATION_COLUMNS) {
+    try {
+      await client.execute(column.ddl);
+    } catch (err) {
+      // ถ้าคอลัมน์มีอยู่แล้วจะ error แบบ "duplicate column name" ซึ่งข้ามได้อย่างปลอดภัย
+      if (!/duplicate column/i.test(err.message)) {
+        console.error(`[db] เพิ่มคอลัมน์ ${column.name} ไม่สำเร็จ:`, err.message);
+      }
+    }
   }
   console.log(
     TURSO_URL
@@ -789,8 +810,10 @@ function rowToApplication(row) {
     discordName: row.discord_name,
     department: row.department,
     gameName: row.game_name,
-    reason: row.reason,
-    experience: row.experience,
+    age: row.age,
+    phone: row.phone,
+    examinerName: row.examiner_name,
+    steamLink: row.steam_link,
     status: row.status,
     reviewedBy: row.reviewed_by,
     reviewedAt: row.reviewed_at,
@@ -812,15 +835,17 @@ async function findPendingApplication(discordId) {
 async function addApplication(entry) {
   await ready;
   const result = await client.execute({
-    sql: `INSERT INTO applications (discord_id, discord_name, department, game_name, reason, experience, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, 'รอตรวจสอบ', ?)`,
+    sql: `INSERT INTO applications (discord_id, discord_name, department, game_name, age, phone, examiner_name, steam_link, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'รอตรวจสอบ', ?)`,
     args: [
       entry.discordId,
       entry.discordName,
       entry.department,
       entry.gameName,
-      entry.reason,
-      entry.experience ?? null,
+      entry.age,
+      entry.phone,
+      entry.examinerName,
+      entry.steamLink,
       entry.createdAt,
     ],
   });

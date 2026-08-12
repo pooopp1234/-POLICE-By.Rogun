@@ -415,11 +415,13 @@ function applicationReviewEmbed(app, reviewerTag) {
     .setTitle(isPending ? "📥 ใบสมัครใหม่ — รอตรวจสอบ" : approved ? "✅ ใบสมัคร — อนุมัติแล้ว" : "❌ ใบสมัคร — ปฏิเสธแล้ว")
     .setDescription(`<@${app.discordId}> ส่งใบสมัครเข้าหน่วยงาน **${app.department}**`)
     .addFields(
-      { name: "ชื่อในเกม", value: app.gameName, inline: true },
+      { name: "ชื่อ", value: app.gameName, inline: true },
+      { name: "อายุ", value: app.age || "-", inline: true },
       { name: "หน่วยงาน", value: app.department, inline: true },
-      { name: "Discord", value: app.discordName, inline: true },
-      { name: "เหตุผลที่อยากเข้าร่วม", value: app.reason || "-", inline: false },
-      { name: "ประสบการณ์ / ข้อมูลเพิ่มเติม", value: app.experience || "-", inline: false }
+      { name: "เบอร์ในเมือง", value: app.phone || "-", inline: true },
+      { name: "ชื่อผู้คุมสอบ", value: app.examinerName || "-", inline: true },
+      { name: "ลิงค์ Steam", value: app.steamLink || "-", inline: true },
+      { name: "Discord", value: app.discordName, inline: true }
     )
     .setFooter({ text: `Application #${app.id}` })
     .setTimestamp();
