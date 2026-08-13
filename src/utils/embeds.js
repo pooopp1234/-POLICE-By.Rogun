@@ -417,7 +417,6 @@ function applicationReviewEmbed(app, reviewerTag) {
     .addFields(
       { name: "ชื่อ", value: app.gameName, inline: true },
       { name: "อายุ", value: app.age || "-", inline: true },
-      { name: "หน่วยงาน", value: app.department, inline: true },
       { name: "เบอร์ในเมือง", value: app.phone || "-", inline: true },
       { name: "ชื่อผู้คุมสอบ", value: app.examinerName || "-", inline: true },
       { name: "ลิงค์ Steam", value: app.steamLink || "-", inline: true },

@@ -166,7 +166,6 @@ async function handleModalSubmit(interaction) {
       { name: "เบอร์ในเมือง", value: phone, inline: true },
       { name: "ชื่อผู้คุมสอบ", value: examinerName, inline: true },
       { name: "ลิงค์ Steam", value: steamLink, inline: true },
-      { name: "หน่วยงาน", value: department, inline: true },
     ])
   );
 
@@ -252,7 +251,6 @@ async function handleDecision(interaction) {
   }
 
   const logFields = [
-    { name: "หน่วยงาน", value: application.department, inline: true },
     { name: "ชื่อ", value: application.gameName, inline: true },
     { name: "อายุ", value: application.age, inline: true },
     { name: "เบอร์ในเมือง", value: application.phone, inline: true },
