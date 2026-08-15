@@ -483,7 +483,7 @@ async function handleSelectSetPosition(interaction) {
   const nicknameResult = await setNickname(interaction, discordId, `[${position}] ${existing.gameName}`);
 
   const resultLines = [
-    `เปลี่ยนตำแหน่งของ ${existing.gameName} (${existing.discordName}) เป็น "${position}" เรียบร้อยแล้ว`,
+    `เปลี่ยนตำแหน่งของ ${existing.gameName} (${existing.discordId}) เป็น "${position}" เรียบร้อยแล้ว`,
   ];
   if (roleResult?.removed?.length || roleResult?.added?.length) {
     const parts = [];
@@ -509,7 +509,7 @@ async function handleSelectSetPosition(interaction) {
   });
 
   const logFields = [
-    { name: "สมาชิก", value: `${existing.gameName} (${existing.discordName})`, inline: true },
+    { name: "สมาชิก", value: `${existing.gameName} (${existing.discordId})`, inline: true },
     { name: "ตำแหน่งเดิม", value: existing.position || "-", inline: true },
     { name: "ตำแหน่งใหม่", value: position, inline: true },
   ];
@@ -778,7 +778,7 @@ async function handleModalRemoveMember(interaction) {
     embeds: [
       embeds.adminActionEmbed(
         "⚠️ ยืนยันการลบสมาชิก",
-        `ต้องการลบ **${existing.gameName}** (${existing.discordName}) ออกจากรายชื่อใช่หรือไม่?\nประวัติการเข้าเวรเดิมจะยังคงอยู่ แต่จะไม่สามารถเข้าเวรได้อีกจนกว่าจะสมัครใหม่`,
+        `ต้องการลบ **${existing.gameName}** (${existing.discordId}) ออกจากรายชื่อใช่หรือไม่?\nประวัติการเข้าเวรเดิมจะยังคงอยู่ แต่จะไม่สามารถเข้าเวรได้อีกจนกว่าจะสมัครใหม่`,
         [{ name: "ตำแหน่งปัจจุบัน", value: existing.position || "-", inline: true }]
       ),
     ],
@@ -811,7 +811,7 @@ async function handleRemoveMemberConfirm(interaction, discordId) {
   await db.removeMember(discordId);
   await roster.refreshRoster(interaction.client);
 
-  const embed = embeds.successEmbed(`ลบสมาชิก ${existing.gameName} (${existing.discordName}) ออกจากระบบเรียบร้อยแล้ว`);
+  const embed = embeds.successEmbed(`ลบสมาชิก ${existing.gameName} (${existing.discordId}) ออกจากระบบเรียบร้อยแล้ว`);
 
   await interaction.editReply({ embeds: [embed], components: [] });
 
@@ -819,7 +819,7 @@ async function handleRemoveMemberConfirm(interaction, discordId) {
     interaction.client,
     "แอดมิน",
     embeds.adminActionEmbed("🗑️ ลบสมาชิก", `แอดมิน ${interaction.user.tag} ลบสมาชิกออกจากระบบ`, [
-      { name: "สมาชิก", value: `${existing.gameName} (${existing.discordName})`, inline: true },
+      { name: "สมาชิก", value: `${existing.gameName} (${existing.discordId})`, inline: true },
       { name: "ตำแหน่งเดิม", value: existing.position || "-", inline: true },
     ])
   );
