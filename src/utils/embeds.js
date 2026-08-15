@@ -420,7 +420,7 @@ function applicationReviewEmbed(app, reviewerTag) {
       { name: "เบอร์ในเมือง", value: app.phone || "-", inline: true },
       { name: "ชื่อผู้คุมสอบ", value: app.examinerName || "-", inline: true },
       { name: "ลิงค์ Steam", value: app.steamLink || "-", inline: true },
-      { name: "Discord", value: app.discordName, inline: true }
+      { name: "Discord", value: app.discordId, inline: true }
     )
     .setFooter({ text: `Application #${app.id}` })
     .setTimestamp();
