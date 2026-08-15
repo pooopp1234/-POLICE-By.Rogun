@@ -208,6 +208,7 @@ const USER_SELECT_META = {
   ap_clearduty: { customId: "ap_select_clearduty", placeholder: "เลือกสมาชิกที่จะล้างสถานะเวร" },
   ap_setposition: { customId: "ap_select_setposition_user", placeholder: "เลือกสมาชิกที่จะแก้ไขตำแหน่ง" },
   ap_removemember: { customId: "ap_select_removemember_user", placeholder: "เลือกสมาชิกที่จะลบ" },
+  ap_register: { customId: "ap_select_register_user", placeholder: "เลือกสมาชิกที่จะเพิ่ม" },
 };
 
 async function handleAskUser(interaction, buttonId) {
@@ -221,19 +222,14 @@ async function handleAskUser(interaction, buttonId) {
 
 // ---------- ปุ่ม: เปิด modal ทันที ----------
 
-function registerModal() {
-  const modal = new ModalBuilder().setCustomId("ap_modal_register").setTitle("เพิ่มสมาชิกใหม่");
-  const idInput = new TextInputBuilder()
-    .setCustomId("discordId")
-    .setLabel("Discord ID (ตัวเลขล้วน 17-20 หลัก)")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
+function registerModal(targetId) {
+  const modal = new ModalBuilder().setCustomId(`ap_modal_register:${targetId}`).setTitle("เพิ่มสมาชิกใหม่");
   const nameInput = new TextInputBuilder()
     .setCustomId("gameName")
     .setLabel("ชื่อสมาชิก")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
-  modal.addComponents(new ActionRowBuilder().addComponents(idInput), new ActionRowBuilder().addComponents(nameInput));
+  modal.addComponents(new ActionRowBuilder().addComponents(nameInput));
   return modal;
 }
 
@@ -264,7 +260,6 @@ async function handleButton(interaction) {
   if (id === "ap_postdutypanel") return handlePostDutyPanel(interaction);
   if (id === "ap_postroster") return handlePostRoster(interaction);
   if (id in USER_SELECT_META) return handleAskUser(interaction, id);
-  if (id === "ap_register") return interaction.showModal(registerModal());
   if (id.startsWith("ap_removemember_confirm:")) return handleRemoveMemberConfirm(interaction, id.split(":")[1]);
   if (id === "ap_removemember_cancel") return handleRemoveMemberCancel(interaction);
   if (id === "ap_runweekly") return handleRunWeekly(interaction);
@@ -369,6 +364,7 @@ async function handleUserSelect(interaction) {
   if (id === "ap_select_subhours") return interaction.showModal(subHoursModal(targetId));
   if (id === "ap_select_edittime") return interaction.showModal(editTimeModal(targetId));
   if (id === "ap_select_clearduty") return handleSelectClearDuty(interaction);
+  if (id === "ap_select_register_user") return interaction.showModal(registerModal(targetId));
   if (id === "ap_select_setposition_user") return handleSelectMemberForSetPosition(interaction, targetId);
   if (id === "ap_select_removemember_user") return handleSelectMemberForRemoveMember(interaction, targetId);
 }
@@ -726,23 +722,16 @@ async function handleModalEditTime(interaction, targetId) {
   await sendLog(interaction.client, "แอดมิน", embed);
 }
 
-async function handleModalRegister(interaction) {
+async function handleModalRegister(interaction, targetId) {
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-  const discordId = interaction.fields.getTextInputValue("discordId").trim();
   const gameName = interaction.fields.getTextInputValue("gameName").trim();
-
-  if (!/^\d{17,20}$/.test(discordId)) {
-    return interaction.editReply({
-      embeds: [embeds.errorEmbed("ไอดีดิสคอร์ดไม่ถูกต้อง กรุณาใส่เฉพาะตัวเลข (17-20 หลัก)")],
-    });
-  }
 
   let target;
   try {
-    target = await interaction.client.users.fetch(discordId);
+    target = await interaction.client.users.fetch(targetId);
   } catch {
-    return interaction.editReply({ embeds: [embeds.errorEmbed("ไม่พบผู้ใช้ Discord ที่ไอดีนี้ กรุณาตรวจสอบไอดีอีกครั้ง")] });
+    return interaction.editReply({ embeds: [embeds.errorEmbed("ไม่พบผู้ใช้ Discord รายนี้ กรุณาลองใหม่อีกครั้ง")] });
   }
 
   const existing = await db.findMember(target.id);
@@ -813,7 +802,7 @@ async function handleModalSubmit(interaction) {
   if (action === "ap_modal_addhours") return handleModalAddHours(interaction, targetId);
   if (action === "ap_modal_subhours") return handleModalSubHours(interaction, targetId);
   if (action === "ap_modal_edittime") return handleModalEditTime(interaction, targetId);
-  if (action === "ap_modal_register") return handleModalRegister(interaction);
+  if (action === "ap_modal_register") return handleModalRegister(interaction, targetId);
 }
 
 module.exports = {
