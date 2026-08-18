@@ -6,7 +6,6 @@ const embeds = require("./utils/embeds");
 const dutyActions = require("./utils/dutyActions");
 const panel = require("./utils/panel");
 const applicationPanel = require("./utils/applicationPanel");
-const weeklyReset = require("./utils/weeklyReset");
 const queue = require("./utils/queue");
 const { sendLog } = require("./utils/permissions");
 const adminPanelHandler = require("./handlers/adminPanelHandler");
@@ -42,7 +41,8 @@ client.once("ready", async () => {
   await panel.refreshPanel(client); // ซิงก์แผงเข้าเวรที่ปักไว้ให้ตรงกับสถานะล่าสุดหลังบอทรีสตาร์ท
   await queue.refreshQueuePanel(client); // ซิงก์แผงคิวแพทย์ที่ปักไว้เช่นกัน
   await applicationPanel.refreshApplicationPanel(client); // ซิงก์แผงสมัครที่ปักไว้ให้ตรงกับ config ล่าสุด
-  weeklyReset.start(client); // เริ่มระบบสรุป + รีเซ็ตชั่วโมงเวรรายสัปดาห์อัตโนมัติ
+  // หมายเหตุ: ระบบเคลียร์ฐานข้อมูลรายสัปดาห์ (weeklyReset) เป็นแบบแอดมินสั่งเองเท่านั้น
+  // (ผ่านคำสั่ง /เคลียร์ฐานข้อมูลรายสัปดาห์ หรือปุ่มในแผงแอดมิน) จึงไม่มีการรันอัตโนมัติตอนบอทเริ่มทำงาน
   queue.start(client); // เริ่มระบบเช็คคนพักหมดเวลาในคิวแพทย์อัตโนมัติ
 });
 

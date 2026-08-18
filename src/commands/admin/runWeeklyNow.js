@@ -7,8 +7,16 @@ const { isAdmin } = require("../../utils/permissions");
 module.exports = {
   adminOnly: true,
   data: new SlashCommandBuilder()
-    .setName("สรุปสัปดาห์ทันที")
-    .setDescription("[แอดมิน] สั่งให้ระบบสรุปรายสัปดาห์ทำงานทันที ไม่ต้องรอรอบอัตโนมัติ (บันทึกลงประวัติ)"),
+    .setName("เคลียร์ฐานข้อมูลรายสัปดาห์")
+    .setDescription(
+      "[แอดมิน] สรุปยอดชั่วโมงเวรที่ค้างอยู่ บันทึกลงประวัติ แล้วลบข้อมูลที่ปิดรายการแล้วออกจาก duty_log จริง (สั่งเอง ไม่มีระบบอัตโนมัติ)"
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("ยืนยัน")
+        .setDescription("ต้องระบุ true เพื่อยืนยัน เพราะคำสั่งนี้จะลบข้อมูลเวรที่ปิดรายการแล้วออกจากฐานข้อมูลจริง (ย้อนกลับไม่ได้)")
+        .setRequired(true)
+    ),
 
   async execute(interaction) {
     if (!isAdmin(interaction)) {
@@ -18,14 +26,27 @@ module.exports = {
       });
     }
 
+    const confirmed = interaction.options.getBoolean("ยืนยัน");
+    if (!confirmed) {
+      return interaction.reply({
+        embeds: [
+          embeds.errorEmbed(
+            "ยกเลิกแล้ว — ยังไม่ได้เคลียร์ฐานข้อมูล (ต้องระบุ ยืนยัน:true เพราะคำสั่งนี้จะลบข้อมูลเวรที่ปิดรายการแล้วออกจากระบบจริง)"
+          ),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-    const { weekKey, rows, embed } = await weeklyReset.runNow(interaction.client);
+    const { weekKey, rows, embed, clearedCount } = await weeklyReset.runNow(interaction.client);
 
     await interaction.editReply({
       embeds: [
         embeds.successEmbed(
-          `สั่งสรุปสัปดาห์ (${time.weekRangeThaiFromKey(weekKey)}) ทันทีเรียบร้อยแล้ว (${rows.length} คนมีข้อมูล) — บันทึกลงประวัติแล้ว`
+          `สั่งเคลียร์ฐานข้อมูลรายสัปดาห์ (${time.weekRangeThaiFromKey(weekKey)}) เรียบร้อยแล้ว ` +
+            `(${rows.length} คนมีข้อมูลสะสม, ลบ ${clearedCount} แถวออกจากระบบ) — บันทึกลงประวัติแล้ว`
         ),
         embed,
       ],

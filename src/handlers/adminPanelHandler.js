@@ -118,7 +118,7 @@ async function handleSummary(interaction) {
     embeds: [
       embeds.adminActionEmbed(
         `📊 สรุปสัปดาห์นี้ (${time.weekRangeThai()})`,
-        `อัปเดตข้อมูลลงฐานข้อมูล Summary แล้ว (${rows.length} คน) — ระบบจะสรุปและรีเซ็ตยอดรายสัปดาห์อัตโนมัติทุกต้นสัปดาห์`,
+        `อัปเดตข้อมูลลงฐานข้อมูล Summary แล้ว (${rows.length} คน) — ยอดสัปดาห์นี้จะไม่ถูกรีเซ็ตเองอัตโนมัติ ต้องสั่งเคลียร์ฐานข้อมูลรายสัปดาห์เอง (🧹) เมื่อจบรอบ`,
         fields
       ),
     ],
@@ -159,16 +159,39 @@ async function handlePostRoster(interaction) {
   await interaction.editReply({ embeds: [embeds.successEmbed("โพสต์รายชื่อในห้องนี้เรียบร้อยแล้ว")] });
 }
 
+// ขั้นแรก: แค่แจ้งเตือน + ให้กดยืนยันก่อน เพราะปุ่มนี้จะ "ลบ" ข้อมูลเวรที่ปิดรายการแล้วออกจากฐานข้อมูลจริง
 async function handleRunWeekly(interaction) {
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const { weekKey, rows, embed } = await weeklyReset.runNow(interaction.client);
+  await interaction.reply({
+    embeds: [
+      embeds.adminActionEmbed(
+        "⚠️ ยืนยันเคลียร์ฐานข้อมูลรายสัปดาห์",
+        "การกดยืนยันจะสรุปยอดชั่วโมงเวรที่ค้างอยู่ตอนนี้ บันทึกลงประวัติ แล้ว**ลบ**ข้อมูลเวรที่ปิดรายการแล้วออกจาก duty_log จริง " +
+          "(ย้อนกลับไม่ได้ — ยังดูสรุปย้อนหลังได้ผ่าน /ประวัติสัปดาห์) แถวที่ยังเข้าเวรค้างอยู่จะไม่ถูกลบ"
+      ),
+    ],
+    components: [runWeeklyConfirmRow()],
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleRunWeeklyConfirm(interaction) {
+  await interaction.deferUpdate();
+  const { weekKey, rows, embed, clearedCount } = await weeklyReset.runNow(interaction.client);
   await interaction.editReply({
     embeds: [
       embeds.successEmbed(
-        `สั่งสรุปสัปดาห์ (${time.weekRangeThaiFromKey(weekKey)}) ทันทีเรียบร้อยแล้ว (${rows.length} คนมีข้อมูล) — บันทึกลงประวัติแล้ว`
+        `สั่งเคลียร์ฐานข้อมูลรายสัปดาห์ (${time.weekRangeThaiFromKey(weekKey)}) เรียบร้อยแล้ว (${rows.length} คนมีข้อมูลสะสม, ลบ ${clearedCount} แถวออกจากระบบ) — บันทึกลงประวัติแล้ว`
       ),
       embed,
     ],
+    components: [],
+  });
+}
+
+async function handleRunWeeklyCancel(interaction) {
+  await interaction.update({
+    embeds: [embeds.adminActionEmbed("ยกเลิกแล้ว", "ไม่มีการเคลียร์ฐานข้อมูลเกิดขึ้น")],
+    components: [],
   });
 }
 
@@ -247,6 +270,20 @@ function removeMemberConfirmRow(discordId) {
   );
 }
 
+function runWeeklyConfirmRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("ap_runweekly_confirm")
+      .setLabel("ยืนยันเคลียร์ฐานข้อมูล")
+      .setEmoji("🧹")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId("ap_runweekly_cancel")
+      .setLabel("ยกเลิก")
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
 // ---------- ปุ่มหลัก ----------
 
 async function handleButton(interaction) {
@@ -263,6 +300,8 @@ async function handleButton(interaction) {
   if (id.startsWith("ap_removemember_confirm:")) return handleRemoveMemberConfirm(interaction, id.split(":")[1]);
   if (id === "ap_removemember_cancel") return handleRemoveMemberCancel(interaction);
   if (id === "ap_runweekly") return handleRunWeekly(interaction);
+  if (id === "ap_runweekly_confirm") return handleRunWeeklyConfirm(interaction);
+  if (id === "ap_runweekly_cancel") return handleRunWeeklyCancel(interaction);
   if (id === "ap_weeklyhistory") return handleWeeklyHistoryList(interaction);
 }
 

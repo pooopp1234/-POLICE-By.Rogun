@@ -306,6 +306,18 @@ async function clearDutyStatus(discordId) {
   return true;
 }
 
+/**
+ * ลบข้อมูล duty_log ที่ "ปิดรายการแล้ว" ทั้งหมดออกจากฐานข้อมูลจริงๆ
+ * (สถานะ ออกเวร / ล้างแล้ว (แอดมิน) / ปรับเพิ่ม / ปรับลด)
+ * จะไม่ลบแถวที่ยังมีสถานะ "เข้าเวร" (กำลังเข้าเวรค้างอยู่) เพื่อกันข้อมูลกะที่ทำงานอยู่หาย
+ * ใช้กับระบบเคลียร์ฐานข้อมูลรายสัปดาห์แบบแอดมินสั่งเอง — คืนค่าจำนวนแถวที่ถูกลบ
+ */
+async function clearClosedDutyLogs() {
+  await ready;
+  const result = await client.execute("DELETE FROM duty_log WHERE status != 'เข้าเวร'");
+  return Number(result.rowsAffected) || 0;
+}
+
 async function editDutyTime(rowNumber, checkInIso, checkOutIso, hours) {
   await ready;
   if (checkOutIso) {
@@ -498,8 +510,10 @@ function rowToWeeklyHistory(row) {
 }
 
 /**
- * บันทึก/อัปเดตสรุปของสัปดาห์ที่ระบุ (ต่อสมาชิกแต่ละคน) ลงตารางประวัติ
- * เรียกซ้ำได้อย่างปลอดภัย — ถ้าสัปดาห์เดิม+สมาชิกเดิมมีอยู่แล้วจะเขียนทับด้วยยอดล่าสุด ไม่สร้างซ้ำ
+ * บันทึกสรุปของสัปดาห์ที่ระบุ (ต่อสมาชิกแต่ละคน) ลงตารางประวัติ แบบ "สะสม" ไม่ใช่เขียนทับ
+ * เพราะระบบเคลียร์ฐานข้อมูลรายสัปดาห์เป็นแบบแอดมินสั่งเอง อาจสั่งเคลียร์หลายครั้งในสัปดาห์เดียวกันได้
+ * (เช่น เคลียร์ระหว่างสัปดาห์บางส่วน แล้วเคลียร์อีกทีตอนจบสัปดาห์จริง) ยอดของสัปดาห์เดียวกัน+สมาชิกเดิม
+ * จะถูกบวกสะสมเข้าไปเรื่อยๆ ไม่ถูกเขียนทับ จนกว่าจะขึ้นสัปดาห์ใหม่ (weekKey เปลี่ยน)
  * rows: [{ discordId, name, hoursWeek, dutyCount }]
  */
 async function saveWeeklyHistory(weekKey, rows, updatedAt) {
@@ -510,8 +524,8 @@ async function saveWeeklyHistory(weekKey, rows, updatedAt) {
             VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(week_key, discord_id) DO UPDATE SET
               name = excluded.name,
-              hours_week = excluded.hours_week,
-              duty_count = excluded.duty_count,
+              hours_week = weekly_summary_history.hours_week + excluded.hours_week,
+              duty_count = weekly_summary_history.duty_count + excluded.duty_count,
               updated_at = excluded.updated_at`,
       args: [weekKey, row.discordId, row.name, row.hoursWeek, row.dutyCount, updatedAt],
     });
@@ -892,6 +906,7 @@ module.exports = {
   addCheckIn,
   setCheckOut,
   clearDutyStatus,
+  clearClosedDutyLogs,
   editDutyTime,
   addManualAdjustment,
   writeSummaryRow,
