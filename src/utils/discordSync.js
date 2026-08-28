@@ -119,4 +119,39 @@ async function swapPositionRole(interaction, discordId, oldPosition, newPosition
   }
 }
 
-module.exports = { setNickname, assignRoles, swapPositionRole };
+// ถอดยศ/roles หลายอันพร้อมกันออกจากสมาชิกคนหนึ่ง (ใช้ตอนอนุมัติใบลาออก — ถอดยศตำแหน่งทั้งหมด)
+// ไม่ error ถ้าสมาชิกไม่มียศนั้นอยู่แล้ว (ข้ามเงียบๆ)
+async function removeRoles(interaction, discordId, roleIds) {
+  const ids = [...new Set((roleIds || []).filter((id) => id && !id.startsWith("ใส่_")))];
+  if (ids.length === 0) return null; // ยังไม่ได้ตั้งค่า ข้ามไปเงียบๆ
+
+  try {
+    const guild = interaction.guild;
+    if (!guild) return { ok: false, reason: "ไม่พบเซิร์ฟเวอร์ (ใช้นอกกิลด์)" };
+
+    const member = await guild.members.fetch(discordId).catch(() => null);
+    if (!member) {
+      return { ok: false, reason: "สมาชิกไม่ได้อยู่ในเซิร์ฟเวอร์แล้ว จึงถอดยศไม่ได้" };
+    }
+
+    const removed = [];
+    const failed = [];
+
+    for (const roleId of ids) {
+      if (!member.roles.cache.has(roleId)) continue; // ไม่มียศนี้อยู่แล้ว ข้าม
+      try {
+        await member.roles.remove(roleId);
+        removed.push(`<@&${roleId}>`);
+      } catch (err) {
+        failed.push(`<@&${roleId}> (${err.message})`);
+      }
+    }
+
+    return { ok: failed.length === 0, removed, failed };
+  } catch (err) {
+    console.error(`ถอดยศ ${discordId} ไม่สำเร็จ:`, err.message);
+    return { ok: false, reason: err.message };
+  }
+}
+
+module.exports = { setNickname, assignRoles, swapPositionRole, removeRoles };
