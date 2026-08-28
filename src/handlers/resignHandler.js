@@ -8,22 +8,13 @@ const { isApprover, sendLog } = require("../utils/permissions");
 function resignSubmitModal() {
   const modal = new ModalBuilder().setCustomId("resign_modal_submit").setTitle("ยื่นใบลาออก");
 
-  const nameInput = new TextInputBuilder()
-    .setCustomId("fullName")
-    .setLabel("ชื่อ-นามสกุล")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-
   const noteInput = new TextInputBuilder()
     .setCustomId("note")
     .setLabel("หมายเหตุ / เหตุผลการลาออก")
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(true);
 
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(nameInput),
-    new ActionRowBuilder().addComponents(noteInput)
-  );
+  modal.addComponents(new ActionRowBuilder().addComponents(noteInput));
   return modal;
 }
 
@@ -43,6 +34,16 @@ function resignRejectModal(id) {
 
 async function handleButton(interaction) {
   if (interaction.customId === "resign_apply") {
+    const member = await db.findMember(interaction.user.id);
+    if (!member) {
+      return interaction.reply({
+        embeds: [
+          embeds.errorEmbed("ไม่พบชื่อของคุณในฐานข้อมูลสมาชิก กรุณาติดต่อแอดมินก่อนยื่นใบลาออก"),
+        ],
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+
     const pending = await db.findPendingResignation(interaction.user.id);
     if (pending) {
       return interaction.reply({
@@ -89,17 +90,25 @@ async function handleModalSubmit(interaction) {
 }
 
 async function handleSubmit(interaction) {
-  const fullName = interaction.fields.getTextInputValue("fullName").trim();
   const note = interaction.fields.getTextInputValue("note").trim();
 
-  if (!fullName || !note) {
+  if (!note) {
     return interaction.reply({
-      embeds: [embeds.errorEmbed("กรุณากรอกข้อมูลให้ครบถ้วน")],
+      embeds: [embeds.errorEmbed("กรุณากรอกหมายเหตุ/เหตุผลการลาออก")],
       flags: MessageFlags.Ephemeral,
     });
   }
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  // ดึงชื่อจากฐานข้อมูลสมาชิกโดยตรง (ไม่ให้ผู้ยื่นพิมพ์เอง กันชื่อผิด/ไม่ตรงกับระบบ)
+  const member = await db.findMember(interaction.user.id);
+  if (!member) {
+    return interaction.editReply({
+      embeds: [embeds.errorEmbed("ไม่พบชื่อของคุณในฐานข้อมูลสมาชิก กรุณาติดต่อแอดมินก่อนยื่นใบลาออก")],
+    });
+  }
+  const fullName = member.gameName;
 
   // กันยื่นซ้ำอีกครั้ง เผื่อกดปุ่มพร้อมกันหลายครั้งก่อนโมดัลแรกถูกส่ง
   const pending = await db.findPendingResignation(interaction.user.id);
@@ -186,7 +195,12 @@ async function handleRejectSubmit(interaction, id) {
 
 async function finalizeDecision(interaction, id, approve, reason) {
   const status = approve ? db.RESIGN_STATUS_APPROVED : db.RESIGN_STATUS_REJECTED;
-  const resignation = await db.decideResignation(id, status, interaction.user.id, interaction.user.tag, time.nowIso(), reason);
+
+  // ใช้ชื่อในเกมของผู้ดำเนินการจากฐานข้อมูลสมาชิก (ถ้ามี) แทน Discord username ดิบๆ
+  const reviewerMember = await db.findMember(interaction.user.id);
+  const reviewerName = reviewerMember?.gameName || interaction.user.tag;
+
+  const resignation = await db.decideResignation(id, status, interaction.user.id, reviewerName, time.nowIso(), reason);
 
   if (!resignation) {
     return interaction.followUp({
