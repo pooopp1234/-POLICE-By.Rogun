@@ -159,6 +159,16 @@ client.on("interactionCreate", async (interaction) => {
     return;
   }
 
+  if (interaction.isStringSelectMenu() && interaction.customId.startsWith("plate_")) {
+    try {
+      await plateHandler.handleSelectMenu(interaction);
+    } catch (err) {
+      console.error(`เกิดข้อผิดพลาดในระบบป้ายทะเบียน (select ${interaction.customId}):`, err);
+      await safeErrorReply(interaction);
+    }
+    return;
+  }
+
   if (interaction.isModalSubmit() && interaction.customId.startsWith("ap_modal_")) {
     try {
       await adminPanelHandler.handleModalSubmit(interaction);
