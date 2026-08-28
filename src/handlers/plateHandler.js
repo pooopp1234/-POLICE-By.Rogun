@@ -24,6 +24,12 @@ const CUSTOM_MODEL_VALUE = "__custom__";
 
 // ค่าเก็บชั่วคราวระหว่างขั้นตอน เลือกประเภท -> เลือกรุ่นรถ -> เปิดฟอร์ม
 const pendingRegistration = new Map();
+const PENDING_TTL_MS = 10 * 60 * 1000; // เคลียร์ทิ้งอัตโนมัติถ้าผู้ใช้เลือกค้างไว้เกิน 10 นาที
+
+function setPendingRegistration(userId, data) {
+  pendingRegistration.set(userId, data);
+  setTimeout(() => pendingRegistration.delete(userId), PENDING_TTL_MS).unref?.();
+}
 
 function categorySelectRow() {
   const select = new StringSelectMenuBuilder()
@@ -55,9 +61,8 @@ function modelSelectRow(prefillModel) {
 
 function plateRegisterModal(category, carModel) {
   const safeCategory = category || "รถ";
-  const payload = encodeURIComponent(JSON.stringify({ category: safeCategory, carModel: carModel || undefined }));
   const modal = new ModalBuilder()
-    .setCustomId(`plate_modal_register::${payload}`)
+    .setCustomId("plate_modal_register")
     .setTitle(`ลงทะเบียนป้ายทะเบียนรถ (${safeCategory})`);
 
   const plateInput = new TextInputBuilder()
@@ -122,19 +127,11 @@ function plateEditModal() {
 async function handleRegisterModal(interaction) {
   const plateNumber = interaction.fields.getTextInputValue("plateNumber").trim();
 
-  // ประเภท (และรุ่นรถ ถ้าเลือกจากเมนู) ถูกแนบไว้ใน customId ของโมดัลแล้ว เช่น plate_modal_register::%7B...%7D
-  const [, encodedPayload] = interaction.customId.split("::");
-  let category = "รถ";
-  let carModel = "";
-  if (encodedPayload) {
-    try {
-      const payload = JSON.parse(decodeURIComponent(encodedPayload));
-      category = payload.category || category;
-      carModel = payload.carModel || "";
-    } catch (err) {
-      // เผื่อ payload เสียหาย ใช้ค่าเริ่มต้นแทน
-    }
-  }
+  // ประเภทและรุ่นรถ (ถ้าเลือกจากเมนู) ถูกเก็บไว้ชั่วคราวตอนเลือกในเมนูก่อนหน้านี้
+  const pending = pendingRegistration.get(interaction.user.id) || {};
+  pendingRegistration.delete(interaction.user.id);
+  const category = pending.category || "รถ";
+  let carModel = pending.carModel || "";
   // ถ้าไม่ได้เลือกรุ่นรถจากเมนู (เลือก "อื่นๆ") จะมีช่องให้พิมพ์เองในฟอร์ม
   if (!carModel) {
     carModel = interaction.fields.getTextInputValue("carModel").trim();
@@ -285,7 +282,7 @@ async function handleButton(interaction) {
     const member = await db.findMember(interaction.user.id);
     const prefillModel = member ? config.positionVehicleModels?.[member.position] : undefined;
     // เก็บชื่อรุ่นรถที่จะ prefill ไว้ชั่วคราว รอจนกว่าจะเลือกประเภท+รุ่นรถเสร็จ
-    pendingRegistration.set(interaction.user.id, { prefillModel });
+    setPendingRegistration(interaction.user.id, { prefillModel });
     return interaction.reply({
       content: "🚘 กรุณาเลือกประเภทพาหนะที่จะลงทะเบียนก่อน:",
       components: [categorySelectRow()],
@@ -301,7 +298,7 @@ async function handleSelectMenu(interaction) {
   if (interaction.customId === "plate_category_select") {
     const category = interaction.values[0];
     const pending = pendingRegistration.get(interaction.user.id) || {};
-    pendingRegistration.set(interaction.user.id, { ...pending, category });
+    setPendingRegistration(interaction.user.id, { ...pending, category });
     return interaction.update({
       content: `🚘 ประเภท: **${category}** — ตอนนี้เลือกรุ่นรถ:`,
       components: [modelSelectRow(pending.prefillModel)],
@@ -310,14 +307,15 @@ async function handleSelectMenu(interaction) {
   if (interaction.customId === "plate_model_select") {
     const selected = interaction.values[0];
     const pending = pendingRegistration.get(interaction.user.id) || {};
-    pendingRegistration.delete(interaction.user.id);
     const carModel = selected === CUSTOM_MODEL_VALUE ? "" : selected;
+    // เก็บรุ่นรถที่เลือกไว้ต่อ รอให้ผู้ใช้ส่งฟอร์ม (จะถูกลบตอนอ่านค่าใน handleRegisterModal)
+    setPendingRegistration(interaction.user.id, { ...pending, carModel });
     return interaction.showModal(plateRegisterModal(pending.category, carModel));
   }
 }
 
 async function handleModalSubmit(interaction) {
-  if (interaction.customId.startsWith("plate_modal_register")) {
+  if (interaction.customId === "plate_modal_register") {
     return handleRegisterModal(interaction);
   }
   if (interaction.customId === "plate_modal_edit") {
