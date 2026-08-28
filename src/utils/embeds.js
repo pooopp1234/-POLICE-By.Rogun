@@ -1,5 +1,6 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const config = require("../../config.json");
+const time = require("./time");
 
 function registerEmbed({ discordName, gameName, position, addedBy }) {
   const embed = new EmbedBuilder()
@@ -517,6 +518,187 @@ function applicationResultEmbed(app, guildId) {
     .setTimestamp();
 }
 
+// ---------- ระบบใบลาออก (ยื่นผ่านปุ่ม + ห้อง log-ลาออก ให้ผู้อนุมัติกดอนุมัติ/ไม่อนุมัติ) ----------
+
+function resignSubmitPanelEmbeds() {
+  const headerEmbed = new EmbedBuilder().setColor(0x5865f2).setTitle("📋 ระบบยื่นใบลาออก");
+
+  const infoEmbed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setDescription(
+      "กดปุ่มด้านล่างเพื่อยื่นใบลาออก กรอกชื่อ-นามสกุลและหมายเหตุ/เหตุผล\n" +
+        "วันที่และเวลาจะถูกบันทึกอัตโนมัติจากตอนที่กดส่งแบบฟอร์ม\n" +
+        "หากมีใบลาออกที่ยังรอการอนุมัติอยู่แล้ว จะไม่สามารถยื่นใบใหม่ได้จนกว่าใบเดิมจะถูกดำเนินการ"
+    )
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Resignation" })
+    .setTimestamp();
+
+  return [headerEmbed, infoEmbed];
+}
+
+function resignSubmitRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("resign_apply").setLabel("ยื่นใบลาออก").setEmoji("📝").setStyle(ButtonStyle.Danger)
+  );
+}
+
+function resignPlatesText(plates) {
+  if (!plates || plates.length === 0) return "`ไม่มีทะเบียนรถที่ลงทะเบียนไว้`";
+  return plates.map((p) => `\`${p.plateNumber}\``).join("\n");
+}
+
+function resignReviewEmbed(r) {
+  const pending = r.status === "รอการอนุมัติ";
+  const approved = r.status === "อนุมัติแล้ว";
+
+  const embed = new EmbedBuilder()
+    .setColor(pending ? 0xfee75c : approved ? 0x57f287 : 0xed4245)
+    .setTitle("🔴 คำขอลาออก")
+    .addFields(
+      { name: "👤 ชื่อ", value: r.fullName || "-", inline: true },
+      { name: "💬 Discord", value: `<@${r.discordId}>`, inline: true },
+      { name: "📝 หมายเหตุ", value: r.note ? `\`\`\`${r.note}\`\`\`` : "`-`", inline: false },
+      { name: "📅 วันที่ยื่น", value: `\`${time.displayDateTime(r.createdAt)}\``, inline: false },
+      { name: "🚗 ทะเบียนรถ", value: resignPlatesText(r.plates), inline: false },
+      { name: "📌 สถานะ", value: `\`${r.status}\``, inline: false }
+    )
+    .setFooter({ text: r.requestId })
+    .setTimestamp();
+
+  if (!pending) {
+    embed.addFields({
+      name: approved ? "🟢 ผู้อนุมัติ" : "🔴 ผู้ดำเนินการ",
+      value: `${r.reviewedByName || r.reviewedBy || "-"} (\`${time.displayDateTime(r.reviewedAt)}\`)`,
+      inline: false,
+    });
+    if (!approved && r.rejectReason) {
+      embed.addFields({ name: "📝 เหตุผลที่ไม่อนุมัติ", value: `\`\`\`${r.rejectReason}\`\`\``, inline: false });
+    }
+  }
+
+  return embed;
+}
+
+function resignReviewRow(id, disabled = false) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`resign_approve_${id}`)
+      .setLabel("อนุมัติ")
+      .setEmoji("🟢")
+      .setStyle(ButtonStyle.Success)
+      .setDisabled(disabled),
+    new ButtonBuilder()
+      .setCustomId(`resign_reject_${id}`)
+      .setLabel("ไม่อนุมัติ")
+      .setEmoji("🔴")
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(disabled)
+  );
+}
+
+function resignResultEmbed(r) {
+  const approved = r.status === "อนุมัติแล้ว";
+
+  const embed = new EmbedBuilder()
+    .setColor(approved ? 0x57f287 : 0xed4245)
+    .setTitle(approved ? "🏥 แจ้งผลใบลาออก" : "❌ ใบลาออกไม่ผ่านการอนุมัติ")
+    .setDescription(
+      approved ? "ใบลาออกของคุณได้รับการ **อนุมัติแล้ว** ✅" : "ใบลาออกของคุณ **ไม่ได้รับการอนุมัติ**"
+    )
+    .addFields(
+      { name: "👤 ชื่อ", value: r.fullName || "-", inline: true },
+      { name: "📅 วันที่ยื่น", value: `\`${time.displayDateTime(r.createdAt)}\``, inline: true }
+    )
+    .setFooter({ text: r.requestId })
+    .setTimestamp();
+
+  if (approved) {
+    embed.addFields({ name: "👮 ผู้อนุมัติ", value: r.reviewedByName || "-", inline: true });
+  } else {
+    embed.addFields(
+      { name: "📝 เหตุผล", value: r.rejectReason ? `\`\`\`${r.rejectReason}\`\`\`` : "`-`", inline: false },
+      { name: "👮 ผู้ดำเนินการ", value: r.reviewedByName || "-", inline: true }
+    );
+  }
+
+  return embed;
+}
+
+// ---------- ห้องเมนูระบบตรวจสอบ (ทะเบียนรถ / ใบลาออก) ----------
+
+function checkMenuEmbed() {
+  return new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle("🔎 ระบบตรวจสอบข้อมูล")
+    .setDescription("เลือกเมนูที่ต้องการใช้งาน\nผลการค้นหาจะแสดงแบบส่วนตัว (เห็นเฉพาะคุณ)")
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Check System" })
+    .setTimestamp();
+}
+
+function checkMenuRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("check_plate").setLabel("ตรวจสอบทะเบียนรถ").setEmoji("🚗").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("check_resign").setLabel("ตรวจสอบใบลาออก").setEmoji("📋").setStyle(ButtonStyle.Secondary)
+  );
+}
+
+function plateCheckPanelEmbeds() {
+  const headerEmbed = new EmbedBuilder().setColor(0x5865f2).setTitle("🚗 ห้องตรวจสอบทะเบียน");
+  const infoEmbed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setDescription("กดปุ่มด้านล่างเพื่อค้นหาทะเบียนรถ ค้นหาได้จากชื่อสมาชิก, Discord ID หรือเลขทะเบียน")
+    .setFooter({ text: "MEDIC DUTY SYSTEM • Plate Check" })
+    .setTimestamp();
+  return [headerEmbed, infoEmbed];
+}
+
+function plateCheckRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("check_plate").setLabel("ตรวจสอบทะเบียน").setEmoji("🔎").setStyle(ButtonStyle.Primary)
+  );
+}
+
+function plateCheckResultEmbed(query, plates) {
+  if (plates.length === 0) {
+    return new EmbedBuilder()
+      .setColor(0xed4245)
+      .setTitle("🔎 ผลการค้นหาทะเบียนรถ")
+      .setDescription(`ไม่พบข้อมูลที่ตรงกับ \`${query}\``);
+  }
+
+  const owners = groupPlatesByOwner(plates);
+  const embed = new EmbedBuilder().setColor(0x57f287).setTitle("🔎 ผลการค้นหาทะเบียนรถ").setFooter({
+    text: `คำค้นหา: ${query} | พบ ${plates.length} คัน`,
+  });
+  for (const [ownerName, categoryMap] of owners) {
+    embed.addFields({ name: `• ${ownerName}`, value: buildOwnerFieldValue(categoryMap) });
+  }
+  return embed;
+}
+
+function resignCheckResultEmbed(query, resignations) {
+  if (resignations.length === 0) {
+    return new EmbedBuilder()
+      .setColor(0xed4245)
+      .setTitle("🔎 ผลการค้นหาใบลาออก")
+      .setDescription(`ไม่พบข้อมูลที่ตรงกับ \`${query}\``);
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle("🔎 ผลการค้นหาใบลาออก")
+    .setFooter({ text: `คำค้นหา: ${query} | พบ ${resignations.length} รายการ` });
+
+  for (const r of resignations.slice(0, 10)) {
+    const statusEmoji = r.status === "รอการอนุมัติ" ? "🟡" : r.status === "อนุมัติแล้ว" ? "🟢" : "🔴";
+    embed.addFields({
+      name: `${statusEmoji} ${r.requestId} — ${r.fullName || "-"}`,
+      value: `Discord: <@${r.discordId}>\nวันที่ยื่น: \`${time.displayDateTime(r.createdAt)}\`\nสถานะ: \`${r.status}\``,
+    });
+  }
+  return embed;
+}
+
 module.exports = {
   registerEmbed,
   checkInEmbed,
@@ -541,4 +723,15 @@ module.exports = {
   applicationReviewEmbed,
   applicationReviewRow,
   applicationResultEmbed,
+  resignSubmitPanelEmbeds,
+  resignSubmitRow,
+  resignReviewEmbed,
+  resignReviewRow,
+  resignResultEmbed,
+  checkMenuEmbed,
+  checkMenuRow,
+  plateCheckPanelEmbeds,
+  plateCheckRow,
+  plateCheckResultEmbed,
+  resignCheckResultEmbed,
 };

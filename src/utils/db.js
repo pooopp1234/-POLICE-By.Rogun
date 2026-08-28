@@ -142,6 +142,37 @@ const SCHEMA_STATEMENTS = [
     review_message_id TEXT,
     created_at TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS resignations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    discord_id TEXT,
+    discord_name TEXT,
+    full_name TEXT,
+    note TEXT,
+    status TEXT,
+    plates_snapshot TEXT,
+    reviewed_by TEXT,
+    reviewed_by_name TEXT,
+    reviewed_at TEXT,
+    reject_reason TEXT,
+    review_channel_id TEXT,
+    review_message_id TEXT,
+    created_at TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS resign_submit_panel (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    channel_id TEXT,
+    message_id TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS check_menu_panel (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    channel_id TEXT,
+    message_id TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS plate_check_panel (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    channel_id TEXT,
+    message_id TEXT
+  )`,
 ];
 
 // รายการคอลัมน์ที่อาจต้องเพิ่มเข้า applications ถ้าฐานข้อมูลเดิมถูกสร้างไว้ก่อนที่จะมีฟิลด์เหล่านี้
@@ -816,6 +847,24 @@ async function updatePlate(oldPlateNumber, updates) {
   return { ok: true, plate: await findPlateByNumber(newPlateNumber) };
 }
 
+/** ป้ายทะเบียนทั้งหมดของเจ้าของคนหนึ่ง (จับคู่ด้วยชื่อในเกม/ชื่อเจ้าของ ตามที่เก็บไว้ตอนลงทะเบียน) */
+async function getPlatesByOwnerName(ownerName) {
+  await ready;
+  if (!ownerName) return [];
+  const { rows } = await client.execute({
+    sql: "SELECT * FROM vehicle_plates WHERE owner_name = ? ORDER BY category ASC, plate_number ASC",
+    args: [ownerName],
+  });
+  return rows.map(rowToPlate);
+}
+
+/** ป้ายทะเบียนทั้งหมดที่ผูกกับ Discord ID คนหนึ่ง (หาชื่อในเกมจากตาราง members ก่อน แล้วจับคู่เจ้าของ) */
+async function getPlatesForDiscordId(discordId) {
+  const member = await findMember(discordId);
+  if (!member) return [];
+  return getPlatesByOwnerName(member.gameName);
+}
+
 async function removePlate(plateNumber) {
   await ready;
   const result = await client.execute({
@@ -955,7 +1004,155 @@ async function decideApplication(id, status, reviewerId, reviewedAt) {
   return getApplication(id);
 }
 
+// ---------- ระบบใบลาออก (ยื่นผ่านปุ่ม + ห้อง log-ลาออก ให้ผู้อนุมัติกดอนุมัติ/ไม่อนุมัติ) ----------
+
+function rowToResignation(row) {
+  if (!row) return null;
+  let plates = [];
+  if (row.plates_snapshot) {
+    try {
+      plates = JSON.parse(row.plates_snapshot);
+    } catch {
+      plates = [];
+    }
+  }
+  return {
+    id: row.id,
+    requestId: `RESIGN-${String(row.id).padStart(5, "0")}`,
+    discordId: row.discord_id,
+    discordName: row.discord_name,
+    fullName: row.full_name,
+    note: row.note,
+    status: row.status,
+    plates,
+    reviewedBy: row.reviewed_by,
+    reviewedByName: row.reviewed_by_name,
+    reviewedAt: row.reviewed_at,
+    rejectReason: row.reject_reason,
+    reviewChannelId: row.review_channel_id,
+    reviewMessageId: row.review_message_id,
+    createdAt: row.created_at,
+  };
+}
+
+const RESIGN_STATUS_PENDING = "รอการอนุมัติ";
+const RESIGN_STATUS_APPROVED = "อนุมัติแล้ว";
+const RESIGN_STATUS_REJECTED = "ไม่อนุมัติ";
+
+async function findPendingResignation(discordId) {
+  await ready;
+  const { rows } = await client.execute({
+    sql: "SELECT * FROM resignations WHERE discord_id = ? AND status = ? LIMIT 1",
+    args: [discordId, RESIGN_STATUS_PENDING],
+  });
+  return rowToResignation(rows[0]);
+}
+
+async function addResignation(entry) {
+  await ready;
+  const result = await client.execute({
+    sql: `INSERT INTO resignations (discord_id, discord_name, full_name, note, status, plates_snapshot, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      entry.discordId,
+      entry.discordName,
+      entry.fullName,
+      entry.note,
+      RESIGN_STATUS_PENDING,
+      JSON.stringify(entry.plates || []),
+      entry.createdAt,
+    ],
+  });
+  return getResignation(Number(result.lastInsertRowid));
+}
+
+async function getResignation(id) {
+  await ready;
+  const { rows } = await client.execute({
+    sql: "SELECT * FROM resignations WHERE id = ?",
+    args: [id],
+  });
+  return rowToResignation(rows[0]);
+}
+
+async function setResignationReviewMessage(id, channelId, messageId) {
+  await ready;
+  await client.execute({
+    sql: "UPDATE resignations SET review_channel_id = ?, review_message_id = ? WHERE id = ?",
+    args: [channelId, messageId, id],
+  });
+}
+
+/** อัปเดตผลการพิจารณา คืนค่า null ถ้าใบลาออกนี้ถูกดำเนินการไปแล้ว (กันกดซ้ำ/กดพร้อมกัน) */
+async function decideResignation(id, status, reviewerId, reviewerName, reviewedAt, rejectReason) {
+  await ready;
+  const result = await client.execute({
+    sql: `UPDATE resignations SET status = ?, reviewed_by = ?, reviewed_by_name = ?, reviewed_at = ?, reject_reason = ?
+          WHERE id = ? AND status = ?`,
+    args: [status, reviewerId, reviewerName, reviewedAt, rejectReason || null, id, RESIGN_STATUS_PENDING],
+  });
+  if (Number(result.rowsAffected) === 0) return null;
+  return getResignation(id);
+}
+
+async function getAllResignations() {
+  await ready;
+  const { rows } = await client.execute("SELECT * FROM resignations ORDER BY id DESC");
+  return rows.map(rowToResignation);
+}
+
+async function getResignSubmitPanel() {
+  await ready;
+  const { rows } = await client.execute("SELECT channel_id, message_id FROM resign_submit_panel WHERE id = 1");
+  if (!rows[0]) return null;
+  return { channelId: rows[0].channel_id, messageId: rows[0].message_id };
+}
+
+async function setResignSubmitPanel(channelId, messageId) {
+  await ready;
+  await client.execute({
+    sql: `INSERT INTO resign_submit_panel (id, channel_id, message_id) VALUES (1, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET channel_id = excluded.channel_id, message_id = excluded.message_id`,
+    args: [channelId, messageId],
+  });
+}
+
+async function getCheckMenuPanel() {
+  await ready;
+  const { rows } = await client.execute("SELECT channel_id, message_id FROM check_menu_panel WHERE id = 1");
+  if (!rows[0]) return null;
+  return { channelId: rows[0].channel_id, messageId: rows[0].message_id };
+}
+
+async function setCheckMenuPanel(channelId, messageId) {
+  await ready;
+  await client.execute({
+    sql: `INSERT INTO check_menu_panel (id, channel_id, message_id) VALUES (1, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET channel_id = excluded.channel_id, message_id = excluded.message_id`,
+    args: [channelId, messageId],
+  });
+}
+
+async function getPlateCheckPanel() {
+  await ready;
+  const { rows } = await client.execute("SELECT channel_id, message_id FROM plate_check_panel WHERE id = 1");
+  if (!rows[0]) return null;
+  return { channelId: rows[0].channel_id, messageId: rows[0].message_id };
+}
+
+async function setPlateCheckPanel(channelId, messageId) {
+  await ready;
+  await client.execute({
+    sql: `INSERT INTO plate_check_panel (id, channel_id, message_id) VALUES (1, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET channel_id = excluded.channel_id, message_id = excluded.message_id`,
+    args: [channelId, messageId],
+  });
+}
+
 module.exports = {
+  RESIGN_STATUS_PENDING,
+  RESIGN_STATUS_APPROVED,
+  RESIGN_STATUS_REJECTED,
   findMember,
   addMember,
   getAllMembers,
@@ -1003,6 +1200,8 @@ module.exports = {
   addPlate,
   updatePlate,
   removePlate,
+  getPlatesByOwnerName,
+  getPlatesForDiscordId,
   getPlatePanel,
   setPlatePanel,
   getPlateListPanel,
@@ -1012,4 +1211,16 @@ module.exports = {
   getApplication,
   setApplicationReviewMessage,
   decideApplication,
+  findPendingResignation,
+  addResignation,
+  getResignation,
+  setResignationReviewMessage,
+  decideResignation,
+  getAllResignations,
+  getResignSubmitPanel,
+  setResignSubmitPanel,
+  getCheckMenuPanel,
+  setCheckMenuPanel,
+  getPlateCheckPanel,
+  setPlateCheckPanel,
 };

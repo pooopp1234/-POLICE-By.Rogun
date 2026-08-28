@@ -5,6 +5,7 @@ const time = require("../utils/time");
 const embeds = require("../utils/embeds");
 const roster = require("../utils/roster");
 const panel = require("../utils/panel");
+const platePanel = require("../utils/platePanel");
 const weeklyReset = require("../utils/weeklyReset");
 const config = require("../../config.json");
 const { sendLog, isAdmin } = require("../utils/permissions");
@@ -15,6 +16,7 @@ const { swapPositionRole, setNickname, assignRoles } = require("../utils/discord
 const pendingRegister = new Map(); // adminId -> { discordId, discordTag, gameName }
 const pendingSetPosition = new Map(); // adminId -> discordId
 const pendingRemoveMember = new Map(); // adminId -> discordId (รอยืนยันก่อนลบจริง)
+const pendingRemovePlate = new Map(); // adminId -> plateNumber (รอยืนยันก่อนลบจริง)
 
 // ---------- Helper: เช็คสิทธิ์แอดมินก่อนให้ใช้งานทุกปุ่ม/เมนู/modal ในแผงควบคุมแอดมิน ----------
 // คืนค่า true ถ้า "ไม่ใช่" แอดมิน (และได้ตอบ interaction แจ้งเตือนไปแล้ว) — ใช้ return early ที่ตัวเรียก
@@ -270,6 +272,31 @@ function removeMemberConfirmRow(discordId) {
   );
 }
 
+function removePlateModal() {
+  const modal = new ModalBuilder().setCustomId("ap_modal_removeplate").setTitle("ลบป้ายทะเบียนรถ");
+  const plateInput = new TextInputBuilder()
+    .setCustomId("plateNumber")
+    .setLabel("เลขทะเบียนที่ต้องการลบ")
+    .setStyle(TextInputStyle.Short)
+    .setRequired(true);
+  modal.addComponents(new ActionRowBuilder().addComponents(plateInput));
+  return modal;
+}
+
+function removePlateConfirmRow() {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("ap_removeplate_confirm")
+      .setLabel("ยืนยันลบ")
+      .setEmoji("🗑️")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId("ap_removeplate_cancel")
+      .setLabel("ยกเลิก")
+      .setStyle(ButtonStyle.Secondary)
+  );
+}
+
 function runWeeklyConfirmRow() {
   return new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -303,6 +330,9 @@ async function handleButton(interaction) {
   if (id === "ap_runweekly_confirm") return handleRunWeeklyConfirm(interaction);
   if (id === "ap_runweekly_cancel") return handleRunWeeklyCancel(interaction);
   if (id === "ap_weeklyhistory") return handleWeeklyHistoryList(interaction);
+  if (id === "ap_removeplate") return interaction.showModal(removePlateModal());
+  if (id === "ap_removeplate_confirm") return handleRemovePlateConfirm(interaction);
+  if (id === "ap_removeplate_cancel") return handleRemovePlateCancel(interaction);
 }
 
 // ---------- User select menu (ขั้นตอนที่ 2 ของ เพิ่ม/ลดชั่วโมง, แก้เวลา, ล้างสถานะเวร) ----------
@@ -833,8 +863,89 @@ async function handleRemoveMemberCancel(interaction) {
   });
 }
 
+// ---------- Modal: ลบป้ายทะเบียนรถ ----------
+
+async function handleModalRemovePlate(interaction) {
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+  const plateNumber = interaction.fields.getTextInputValue("plateNumber").trim();
+  const existing = await db.findPlateByNumber(plateNumber);
+  if (!existing) {
+    return interaction.editReply({ embeds: [embeds.errorEmbed(`ไม่พบเลขทะเบียน \`${plateNumber}\` ในระบบ`)] });
+  }
+
+  pendingRemovePlate.set(interaction.user.id, plateNumber);
+
+  await interaction.editReply({
+    embeds: [
+      embeds.adminActionEmbed(
+        "⚠️ ยืนยันการลบป้ายทะเบียน",
+        `ต้องการลบเลขทะเบียน \`${existing.plateNumber}\` ใช่หรือไม่?`,
+        [
+          { name: "รุ่นรถ", value: existing.carModel || "-", inline: true },
+          { name: "ประเภท", value: existing.category || "-", inline: true },
+          { name: "เจ้าของ/ผู้ขับ", value: existing.ownerName || "-", inline: true },
+        ]
+      ),
+    ],
+    components: [removePlateConfirmRow()],
+  });
+}
+
+// ---------- ปุ่มยืนยัน/ยกเลิก การลบป้ายทะเบียน ----------
+
+async function handleRemovePlateConfirm(interaction) {
+  const plateNumber = pendingRemovePlate.get(interaction.user.id);
+  if (!plateNumber) {
+    return interaction.update({
+      content: 'หมดเวลาการลบป้ายทะเบียน กรุณากดปุ่ม "ลบป้ายทะเบียน" ใหม่อีกครั้ง',
+      embeds: [],
+      components: [],
+    });
+  }
+  pendingRemovePlate.delete(interaction.user.id);
+  await interaction.deferUpdate();
+
+  const existing = await db.findPlateByNumber(plateNumber);
+  if (!existing) {
+    return interaction.editReply({
+      embeds: [embeds.errorEmbed(`ไม่พบเลขทะเบียน \`${plateNumber}\` ในระบบแล้ว (อาจถูกลบไปก่อนหน้านี้)`)],
+      components: [],
+    });
+  }
+
+  await db.removePlate(plateNumber);
+  await platePanel.refreshPlateList(interaction.client);
+
+  await interaction.editReply({
+    embeds: [
+      embeds.successEmbed(`ลบป้ายทะเบียน \`${plateNumber}\` (เจ้าของ/ผู้ขับ: ${existing.ownerName}) ออกจากระบบเรียบร้อยแล้ว`),
+    ],
+    components: [],
+  });
+
+  await sendLog(
+    interaction.client,
+    "ทะเบียน",
+    embeds.adminActionEmbed("🗑️ ลบป้ายทะเบียน", `แอดมิน ${interaction.user.tag} ลบป้ายทะเบียนออกจากระบบ (ผ่านแผงแอดมิน)`, [
+      { name: "เลขทะเบียน", value: plateNumber, inline: true },
+      { name: "เจ้าของ/ผู้ขับ", value: existing.ownerName, inline: true },
+    ])
+  );
+}
+
+async function handleRemovePlateCancel(interaction) {
+  pendingRemovePlate.delete(interaction.user.id);
+  await interaction.update({
+    embeds: [embeds.adminActionEmbed("ยกเลิกแล้ว", "ไม่มีการลบป้ายทะเบียนเกิดขึ้น")],
+    components: [],
+  });
+}
+
 async function handleModalSubmit(interaction) {
   if (await blockIfNotAdmin(interaction)) return;
+
+  if (interaction.customId === "ap_modal_removeplate") return handleModalRemovePlate(interaction);
 
   const [action, targetId] = interaction.customId.split(":");
 

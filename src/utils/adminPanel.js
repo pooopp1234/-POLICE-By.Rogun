@@ -14,6 +14,7 @@ function adminPanelEmbed() {
         "**ข้อมูล:** 📋 คนเข้าเวรตอนนี้ / 📊 สรุปสัปดาห์นี้ / 📁 ส่งออก CSV\n" +
         "**จัดการชั่วโมง/เวลา:** ➕ เพิ่ม / ➖ ลด / ✏️ แก้เวลา / 🧹 ล้างสถานะเวร\n" +
         "**จัดการสมาชิก:** 🆕 เพิ่มสมาชิก / 🎖️ แก้ไขตำแหน่ง / 🗑️ ลบสมาชิก\n" +
+        "**จัดการทะเบียนรถ:** 🚘 ลบป้ายทะเบียน\n" +
         "**ระบบรายสัปดาห์:** 🧹 เคลียร์ฐานข้อมูลรายสัปดาห์ (สั่งเอง ไม่มีระบบอัตโนมัติ) / 📜 ประวัติสัปดาห์ก่อนหน้า"
     )
     .setFooter({ text: "MEDIC DUTY SYSTEM • Admin Panel" })
@@ -40,12 +41,16 @@ function adminPanelRows() {
     new ButtonBuilder().setCustomId("ap_removemember").setLabel("ลบสมาชิก").setEmoji("🗑️").setStyle(ButtonStyle.Danger)
   );
 
+  const rowPlate = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("ap_removeplate").setLabel("ลบป้ายทะเบียน").setEmoji("🚘").setStyle(ButtonStyle.Danger)
+  );
+
   const rowWeekly = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId("ap_runweekly").setLabel("เคลียร์ฐานข้อมูลรายสัปดาห์").setEmoji("🧹").setStyle(ButtonStyle.Danger),
     new ButtonBuilder().setCustomId("ap_weeklyhistory").setLabel("ประวัติสัปดาห์ก่อนหน้า").setEmoji("📜").setStyle(ButtonStyle.Secondary)
   );
 
-  return [rowInfo, rowHours, rowMembers, rowWeekly];
+  return [rowInfo, rowHours, rowMembers, rowPlate, rowWeekly];
 }
 
 module.exports = { adminPanelEmbed, adminPanelRows };

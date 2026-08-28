@@ -6,6 +6,18 @@ function isAdmin(interaction) {
   return config.adminRoleIds.some((roleId) => memberRoles.has(roleId));
 }
 
+/**
+ * ผู้อนุมัติ (สิทธิ์อนุมัติ/ไม่อนุมัติใบลาออก) — กำหนดด้วย approverRoleIds ใน config
+ * แอดมิน (adminRoleIds) นับเป็นผู้อนุมัติได้เสมอ แม้จะไม่มีใน approverRoleIds
+ */
+function isApprover(interaction) {
+  if (isAdmin(interaction)) return true;
+  const memberRoles = interaction.member?.roles?.cache;
+  if (!memberRoles) return false;
+  const approverRoleIds = Array.isArray(config.approverRoleIds) ? config.approverRoleIds : [];
+  return approverRoleIds.some((roleId) => memberRoles.has(roleId));
+}
+
 async function sendLog(client, channelKey, embed) {
   const channelId = config.logChannels[channelKey];
   if (!channelId || channelId.startsWith("ใส่_")) return; // ยังไม่ได้ตั้งค่า ข้ามไป
@@ -17,4 +29,4 @@ async function sendLog(client, channelKey, embed) {
   }
 }
 
-module.exports = { isAdmin, sendLog };
+module.exports = { isAdmin, isApprover, sendLog };

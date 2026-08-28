@@ -2,6 +2,9 @@
   "adminRoleIds": [
     "1532468585258025100"
   ],
+  "approverRoleIds": [
+    "ใส่_ROLE_ID"
+  ],
   "logChannels": {
     "สมัคร": "ใส่_CHANNEL_ID",
     "เข้าเวร": "1532468587112042682",
@@ -10,7 +13,8 @@
     "สรุปสัปดาห์": "1532717936299606166",
     "คิว": "ใส่_CHANNEL_ID",
     "ทะเบียน": "ใส่_CHANNEL_ID",
-    "ใบสมัคร": "ใส่_CHANNEL_ID"
+    "ใบสมัคร": "ใส่_CHANNEL_ID",
+    "ลาออก": "ใส่_CHANNEL_ID"
   },
   "applicationChannelId": "1536327022706556979",
   "dutyChannelId": "1532468587112042678",
