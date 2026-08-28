@@ -256,9 +256,9 @@ function queueEmbed({ ready = [], onCase = [], onBreak = [], loop = [] }) {
     ready.forEach((r, i) => lines.push(`> ${i + 1}. 👨‍⚕️ <@${r.discordId}> (${r.name})`));
   }
 
-  lines.push("", QUEUE_DIVIDER, "", "🚑 **กำลังรับเคส**", "");
+  lines.push("", QUEUE_DIVIDER, "", "🚑 **ยืนหน้าโรงพยาบาล**", "");
   if (onCase.length === 0) {
-    lines.push("> _ไม่มีใครกำลังรับเคส_");
+    lines.push("> _ไม่มีใครยืนหน้าโรงพยาบาล_");
   } else {
     onCase.forEach((m) => {
       lines.push(`> <@${m.discordId}> (${m.name})`);

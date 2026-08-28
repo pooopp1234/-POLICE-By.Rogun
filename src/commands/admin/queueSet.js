@@ -8,12 +8,12 @@ const { isAdmin, sendLog } = require("../../utils/permissions");
 
 const STATUS_CHOICES = [
   { name: "พร้อมรับเคส", value: "ready" },
-  { name: "กำลังรับเคส", value: "on_case" },
+  { name: "ยืนหน้าโรงพยาบาล", value: "on_case" },
   { name: "พัก", value: "break" },
   { name: "ชุบลูป", value: "loop" },
 ];
 
-const STATUS_LABEL = { ready: "พร้อมรับเคส 🟢", on_case: "กำลังรับเคส 🚑", break: "พัก ☕", loop: "ชุบลูป 🔄" };
+const STATUS_LABEL = { ready: "พร้อมรับเคส 🟢", on_case: "ยืนหน้าโรงพยาบาล 🚑", break: "พัก ☕", loop: "ชุบลูป 🔄" };
 
 module.exports = {
   adminOnly: true,
