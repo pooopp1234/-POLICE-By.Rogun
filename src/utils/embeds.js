@@ -329,7 +329,10 @@ function plateSubmitPanelEmbeds() {
 
   const infoEmbed = new EmbedBuilder()
     .setColor(0x5865f2)
-    .setDescription("กดปุ่มด้านล่างเพื่อลงทะเบียนป้ายทะเบียนรถคันใหม่ (เลขทะเบียน + ชื่อเจ้าของ/ผู้ขับ)")
+    .setDescription(
+      "กดปุ่มด้านล่างเพื่อลงทะเบียนป้ายทะเบียนรถคันใหม่ (เลขทะเบียน + รุ่นรถ + ชื่อเจ้าของ/ผู้ขับ)\n" +
+        "ลงทะเบียนได้หลายคันต่อคน (ใช้เลขทะเบียนที่ไม่ซ้ำกัน) กดปุ่ม \"แก้ไขทะเบียน\" เพื่อแก้ไขคันที่ลงไว้แล้ว"
+    )
     .setFooter({ text: "MEDIC DUTY SYSTEM • Plate Registration" })
     .setTimestamp();
 
@@ -338,7 +341,8 @@ function plateSubmitPanelEmbeds() {
 
 function plateSubmitRow() {
   return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("plate_register").setLabel("ลงทะเบียนใหม่").setEmoji("🚘").setStyle(ButtonStyle.Primary)
+    new ButtonBuilder().setCustomId("plate_register").setLabel("ลงทะเบียนใหม่").setEmoji("🚘").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("plate_edit").setLabel("แก้ไขทะเบียน").setEmoji("✏️").setStyle(ButtonStyle.Secondary)
   );
 }
 
@@ -352,7 +356,9 @@ function plateListEmbeds(plates, updatedAtText) {
   const lines =
     plates.length === 0
       ? ["`ยังไม่มีการลงทะเบียนป้ายทะเบียน`"]
-      : plates.map((p) => `\`${p.plateNumber}\` — เจ้าของ/ผู้ขับ: ${p.ownerName}`);
+      : plates.map(
+          (p) => `\`${p.plateNumber}\` — รุ่นรถ: ${p.carModel || "-"} — เจ้าของ/ผู้ขับ: ${p.ownerName}`
+        );
 
   const chunks = [];
   let current = header;

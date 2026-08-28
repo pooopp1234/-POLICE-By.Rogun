@@ -102,10 +102,12 @@ const SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS vehicle_plates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     plate_number TEXT UNIQUE,
+    car_model TEXT,
     owner_name TEXT,
     registered_by TEXT,
     registered_by_name TEXT,
-    created_at TEXT
+    created_at TEXT,
+    updated_at TEXT
   )`,
   `CREATE TABLE IF NOT EXISTS plate_panel (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -149,6 +151,12 @@ const APPLICATIONS_MIGRATION_COLUMNS = [
   { name: "steam_link", ddl: "ALTER TABLE applications ADD COLUMN steam_link TEXT" },
 ];
 
+// รายการคอลัมน์ที่อาจต้องเพิ่มเข้า vehicle_plates ถ้าฐานข้อมูลเดิมถูกสร้างไว้ก่อนที่จะมีฟิลด์เหล่านี้
+const PLATES_MIGRATION_COLUMNS = [
+  { name: "car_model", ddl: "ALTER TABLE vehicle_plates ADD COLUMN car_model TEXT" },
+  { name: "updated_at", ddl: "ALTER TABLE vehicle_plates ADD COLUMN updated_at TEXT" },
+];
+
 const ready = (async () => {
   if (!TURSO_URL) {
     await client.execute("PRAGMA journal_mode = WAL;");
@@ -162,6 +170,16 @@ const ready = (async () => {
       await client.execute(column.ddl);
     } catch (err) {
       // ถ้าคอลัมน์มีอยู่แล้วจะ error แบบ "duplicate column name" ซึ่งข้ามได้อย่างปลอดภัย
+      if (!/duplicate column/i.test(err.message)) {
+        console.error(`[db] เพิ่มคอลัมน์ ${column.name} ไม่สำเร็จ:`, err.message);
+      }
+    }
+  }
+  // เผื่อฐานข้อมูลเดิมถูกสร้างไว้ก่อนมีคอลัมน์ car_model/updated_at ให้เพิ่มให้อัตโนมัติ
+  for (const column of PLATES_MIGRATION_COLUMNS) {
+    try {
+      await client.execute(column.ddl);
+    } catch (err) {
       if (!/duplicate column/i.test(err.message)) {
         console.error(`[db] เพิ่มคอลัมน์ ${column.name} ไม่สำเร็จ:`, err.message);
       }
@@ -719,10 +737,12 @@ function rowToPlate(row) {
   return {
     id: row.id,
     plateNumber: row.plate_number,
+    carModel: row.car_model,
     ownerName: row.owner_name,
     registeredBy: row.registered_by,
     registeredByName: row.registered_by_name,
     createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -737,22 +757,56 @@ async function findPlateByNumber(plateNumber) {
 
 async function getAllPlates() {
   await ready;
-  const { rows } = await client.execute("SELECT * FROM vehicle_plates ORDER BY plate_number ASC");
+  const { rows } = await client.execute("SELECT * FROM vehicle_plates ORDER BY owner_name ASC, plate_number ASC");
   return rows.map(rowToPlate);
 }
 
-/** ลงทะเบียนป้ายทะเบียนใหม่ คืนค่า null ถ้าเลขทะเบียนนี้มีอยู่แล้ว (กันซ้ำ) */
+/** ลงทะเบียนป้ายทะเบียนใหม่ คืนค่า null ถ้าเลขทะเบียนนี้มีอยู่แล้ว (กันซ้ำ) — เจ้าของคนเดียวลงทะเบียนได้หลายคัน (เลขทะเบียนต่างกัน) */
 async function addPlate(entry) {
   await ready;
   const existing = await findPlateByNumber(entry.plateNumber);
   if (existing) return null;
 
   await client.execute({
-    sql: `INSERT INTO vehicle_plates (plate_number, owner_name, registered_by, registered_by_name, created_at)
-          VALUES (?, ?, ?, ?, ?)`,
-    args: [entry.plateNumber, entry.ownerName, entry.registeredBy, entry.registeredByName, entry.createdAt],
+    sql: `INSERT INTO vehicle_plates (plate_number, car_model, owner_name, registered_by, registered_by_name, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      entry.plateNumber,
+      entry.carModel || null,
+      entry.ownerName,
+      entry.registeredBy,
+      entry.registeredByName,
+      entry.createdAt,
+      entry.createdAt,
+    ],
   });
   return findPlateByNumber(entry.plateNumber);
+}
+
+/**
+ * แก้ไขป้ายทะเบียนที่ลงไว้แล้ว — เปลี่ยนเลขทะเบียนและ/หรือชื่อรุ่นรถได้
+ * คืนค่า { ok:false, reason:"not_found" } ถ้าไม่พบเลขทะเบียนเดิม
+ * คืนค่า { ok:false, reason:"duplicate" } ถ้าเลขทะเบียนใหม่ซ้ำกับคันอื่นที่มีอยู่แล้ว
+ */
+async function updatePlate(oldPlateNumber, updates) {
+  await ready;
+  const existing = await findPlateByNumber(oldPlateNumber);
+  if (!existing) return { ok: false, reason: "not_found" };
+
+  const newPlateNumber = updates.plateNumber || existing.plateNumber;
+  if (newPlateNumber !== existing.plateNumber) {
+    const clash = await findPlateByNumber(newPlateNumber);
+    if (clash) return { ok: false, reason: "duplicate" };
+  }
+
+  const newCarModel = updates.carModel !== undefined ? updates.carModel : existing.carModel;
+
+  await client.execute({
+    sql: `UPDATE vehicle_plates SET plate_number = ?, car_model = ?, updated_at = ? WHERE plate_number = ?`,
+    args: [newPlateNumber, newCarModel || null, updates.updatedAt, oldPlateNumber],
+  });
+
+  return { ok: true, plate: await findPlateByNumber(newPlateNumber) };
 }
 
 async function removePlate(plateNumber) {
@@ -940,6 +994,7 @@ module.exports = {
   findPlateByNumber,
   getAllPlates,
   addPlate,
+  updatePlate,
   removePlate,
   getPlatePanel,
   setPlatePanel,
