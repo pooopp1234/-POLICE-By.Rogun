@@ -20,9 +20,17 @@ function plateRegisterModal() {
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
+  const categoryInput = new TextInputBuilder()
+    .setCustomId("category")
+    .setLabel("ประเภท (รถ / ฮ / เรือ ฯลฯ)")
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder("รถ")
+    .setRequired(false);
+
   modal.addComponents(
     new ActionRowBuilder().addComponents(plateInput),
-    new ActionRowBuilder().addComponents(modelInput)
+    new ActionRowBuilder().addComponents(modelInput),
+    new ActionRowBuilder().addComponents(categoryInput)
   );
   return modal;
 }
@@ -48,10 +56,18 @@ function plateEditModal() {
     .setStyle(TextInputStyle.Short)
     .setRequired(false);
 
+  const newCategoryInput = new TextInputBuilder()
+    .setCustomId("newCategory")
+    .setLabel("ประเภทใหม่ (เว้นว่างถ้าไม่เปลี่ยน)")
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder("รถ / ฮ / เรือ ฯลฯ")
+    .setRequired(false);
+
   modal.addComponents(
     new ActionRowBuilder().addComponents(oldPlateInput),
     new ActionRowBuilder().addComponents(newPlateInput),
-    new ActionRowBuilder().addComponents(newModelInput)
+    new ActionRowBuilder().addComponents(newModelInput),
+    new ActionRowBuilder().addComponents(newCategoryInput)
   );
   return modal;
 }
@@ -59,6 +75,7 @@ function plateEditModal() {
 async function handleRegisterModal(interaction) {
   const plateNumber = interaction.fields.getTextInputValue("plateNumber").trim();
   const carModel = interaction.fields.getTextInputValue("carModel").trim();
+  const category = interaction.fields.getTextInputValue("category").trim() || "รถ";
 
   if (!plateNumber || !carModel) {
     return interaction.reply({
@@ -84,6 +101,7 @@ async function handleRegisterModal(interaction) {
   const created = await db.addPlate({
     plateNumber,
     carModel,
+    category,
     ownerName,
     registeredBy: interaction.user.id,
     registeredByName: interaction.user.tag,
@@ -106,7 +124,7 @@ async function handleRegisterModal(interaction) {
   await interaction.editReply({
     embeds: [
       embeds.successEmbed(
-        `ลงทะเบียนป้ายทะเบียน \`${plateNumber}\` (รุ่นรถ: ${carModel} / เจ้าของ/ผู้ขับ: ${ownerName}) เรียบร้อยแล้ว`
+        `ลงทะเบียนป้ายทะเบียน \`${plateNumber}\` (${category} — รุ่นรถ: ${carModel} / เจ้าของ/ผู้ขับ: ${ownerName}) เรียบร้อยแล้ว`
       ),
     ],
   });
@@ -117,6 +135,7 @@ async function handleRegisterModal(interaction) {
     embeds.adminActionEmbed("🚘 ลงทะเบียนป้ายทะเบียนใหม่", `${interaction.user.tag} ลงทะเบียนป้ายทะเบียนรถ`, [
       { name: "เลขทะเบียน", value: plateNumber, inline: true },
       { name: "รุ่นรถ", value: carModel, inline: true },
+      { name: "ประเภท", value: category, inline: true },
       { name: "เจ้าของ/ผู้ขับ", value: ownerName, inline: true },
     ])
   );
@@ -126,6 +145,7 @@ async function handleEditModal(interaction) {
   const oldPlateNumber = interaction.fields.getTextInputValue("oldPlateNumber").trim();
   const newPlateNumberRaw = interaction.fields.getTextInputValue("newPlateNumber").trim();
   const newCarModelRaw = interaction.fields.getTextInputValue("newCarModel").trim();
+  const newCategoryRaw = interaction.fields.getTextInputValue("newCategory").trim();
 
   if (!oldPlateNumber) {
     return interaction.reply({
@@ -134,9 +154,9 @@ async function handleEditModal(interaction) {
     });
   }
 
-  if (!newPlateNumberRaw && !newCarModelRaw) {
+  if (!newPlateNumberRaw && !newCarModelRaw && !newCategoryRaw) {
     return interaction.reply({
-      embeds: [embeds.errorEmbed("กรุณากรอกเลขทะเบียนใหม่ หรือชื่อรุ่นรถใหม่ อย่างน้อย 1 อย่าง")],
+      embeds: [embeds.errorEmbed("กรุณากรอกเลขทะเบียนใหม่ ชื่อรุ่นรถใหม่ หรือประเภทใหม่ อย่างน้อย 1 อย่าง")],
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -161,6 +181,7 @@ async function handleEditModal(interaction) {
   const result = await db.updatePlate(oldPlateNumber, {
     plateNumber: newPlateNumberRaw || undefined,
     carModel: newCarModelRaw || undefined,
+    category: newCategoryRaw || undefined,
     updatedAt: nowIso,
   });
 
@@ -179,7 +200,7 @@ async function handleEditModal(interaction) {
       embeds.successEmbed(
         `แก้ไขป้ายทะเบียน \`${oldPlateNumber}\` เรียบร้อยแล้ว → เลขทะเบียน: \`${result.plate.plateNumber}\` / รุ่นรถ: ${
           result.plate.carModel || "-"
-        }`
+        } / ประเภท: ${result.plate.category || "-"}`
       ),
     ],
   });
@@ -191,6 +212,7 @@ async function handleEditModal(interaction) {
       { name: "เลขทะเบียนเดิม", value: oldPlateNumber, inline: true },
       { name: "เลขทะเบียนใหม่", value: result.plate.plateNumber, inline: true },
       { name: "รุ่นรถ", value: result.plate.carModel || "-", inline: true },
+      { name: "ประเภท", value: result.plate.category || "-", inline: true },
     ])
   );
 }

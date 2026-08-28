@@ -103,6 +103,7 @@ const SCHEMA_STATEMENTS = [
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     plate_number TEXT UNIQUE,
     car_model TEXT,
+    category TEXT,
     owner_name TEXT,
     registered_by TEXT,
     registered_by_name TEXT,
@@ -154,6 +155,7 @@ const APPLICATIONS_MIGRATION_COLUMNS = [
 // รายการคอลัมน์ที่อาจต้องเพิ่มเข้า vehicle_plates ถ้าฐานข้อมูลเดิมถูกสร้างไว้ก่อนที่จะมีฟิลด์เหล่านี้
 const PLATES_MIGRATION_COLUMNS = [
   { name: "car_model", ddl: "ALTER TABLE vehicle_plates ADD COLUMN car_model TEXT" },
+  { name: "category", ddl: "ALTER TABLE vehicle_plates ADD COLUMN category TEXT" },
   { name: "updated_at", ddl: "ALTER TABLE vehicle_plates ADD COLUMN updated_at TEXT" },
 ];
 
@@ -738,6 +740,7 @@ function rowToPlate(row) {
     id: row.id,
     plateNumber: row.plate_number,
     carModel: row.car_model,
+    category: row.category,
     ownerName: row.owner_name,
     registeredBy: row.registered_by,
     registeredByName: row.registered_by_name,
@@ -757,7 +760,9 @@ async function findPlateByNumber(plateNumber) {
 
 async function getAllPlates() {
   await ready;
-  const { rows } = await client.execute("SELECT * FROM vehicle_plates ORDER BY owner_name ASC, plate_number ASC");
+  const { rows } = await client.execute(
+    "SELECT * FROM vehicle_plates ORDER BY owner_name ASC, category ASC, plate_number ASC"
+  );
   return rows.map(rowToPlate);
 }
 
@@ -768,11 +773,12 @@ async function addPlate(entry) {
   if (existing) return null;
 
   await client.execute({
-    sql: `INSERT INTO vehicle_plates (plate_number, car_model, owner_name, registered_by, registered_by_name, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    sql: `INSERT INTO vehicle_plates (plate_number, car_model, category, owner_name, registered_by, registered_by_name, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     args: [
       entry.plateNumber,
       entry.carModel || null,
+      entry.category || null,
       entry.ownerName,
       entry.registeredBy,
       entry.registeredByName,
@@ -784,7 +790,7 @@ async function addPlate(entry) {
 }
 
 /**
- * แก้ไขป้ายทะเบียนที่ลงไว้แล้ว — เปลี่ยนเลขทะเบียนและ/หรือชื่อรุ่นรถได้
+ * แก้ไขป้ายทะเบียนที่ลงไว้แล้ว — เปลี่ยนเลขทะเบียน/ชื่อรุ่นรถ/ประเภทได้
  * คืนค่า { ok:false, reason:"not_found" } ถ้าไม่พบเลขทะเบียนเดิม
  * คืนค่า { ok:false, reason:"duplicate" } ถ้าเลขทะเบียนใหม่ซ้ำกับคันอื่นที่มีอยู่แล้ว
  */
@@ -800,10 +806,11 @@ async function updatePlate(oldPlateNumber, updates) {
   }
 
   const newCarModel = updates.carModel !== undefined ? updates.carModel : existing.carModel;
+  const newCategory = updates.category !== undefined ? updates.category : existing.category;
 
   await client.execute({
-    sql: `UPDATE vehicle_plates SET plate_number = ?, car_model = ?, updated_at = ? WHERE plate_number = ?`,
-    args: [newPlateNumber, newCarModel || null, updates.updatedAt, oldPlateNumber],
+    sql: `UPDATE vehicle_plates SET plate_number = ?, car_model = ?, category = ?, updated_at = ? WHERE plate_number = ?`,
+    args: [newPlateNumber, newCarModel || null, newCategory || null, updates.updatedAt, oldPlateNumber],
   });
 
   return { ok: true, plate: await findPlateByNumber(newPlateNumber) };

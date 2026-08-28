@@ -330,8 +330,9 @@ function plateSubmitPanelEmbeds() {
   const infoEmbed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setDescription(
-      "กดปุ่มด้านล่างเพื่อลงทะเบียนป้ายทะเบียนรถคันใหม่ (เลขทะเบียน + รุ่นรถ + ชื่อเจ้าของ/ผู้ขับ)\n" +
-        "ลงทะเบียนได้หลายคันต่อคน (ใช้เลขทะเบียนที่ไม่ซ้ำกัน) กดปุ่ม \"แก้ไขทะเบียน\" เพื่อแก้ไขคันที่ลงไว้แล้ว"
+      "กดปุ่มด้านล่างเพื่อลงทะเบียนป้ายทะเบียนรถคันใหม่ (เลขทะเบียน + รุ่นรถ + ประเภท + ชื่อเจ้าของ/ผู้ขับ)\n" +
+        "ลงทะเบียนได้หลายคันต่อคน (ใช้เลขทะเบียนที่ไม่ซ้ำกัน) กดปุ่ม \"แก้ไขทะเบียน\" เพื่อแก้ไขคันที่ลงไว้แล้ว\n" +
+        "ประเภท เช่น รถ, ฮ (เฮลิคอปเตอร์), เรือ ฯลฯ"
     )
     .setFooter({ text: "MEDIC DUTY SYSTEM • Plate Registration" })
     .setTimestamp();
@@ -346,41 +347,79 @@ function plateSubmitRow() {
   );
 }
 
-const PLATE_DIVIDER = "> ══════════════════════";
-const PLATE_CHUNK_LIMIT = 3800;
+const PLATE_FIELD_VALUE_LIMIT = 1024;
+const PLATE_EMBED_FIELDS_LIMIT = 24; // เผื่อพื้นที่ไว้บ้าง (Discord จำกัด 25 fields/embed)
+const PLATE_EMBED_CHARS_LIMIT = 5500; // เผื่อพื้นที่จากขีดจำกัดจริง 6000 ตัวอักษรต่อ embed
+
+/** จัดกลุ่มป้ายทะเบียนตามเจ้าของ แล้วตามประเภทรถภายในแต่ละคน (เช่น รถ / ฮ / เรือ) */
+function groupPlatesByOwner(plates) {
+  const owners = new Map(); // ownerName -> Map(category -> plate[])
+
+  for (const p of plates) {
+    if (!owners.has(p.ownerName)) owners.set(p.ownerName, new Map());
+    const categoryMap = owners.get(p.ownerName);
+    const category = p.category?.trim() || "อื่นๆ";
+    if (!categoryMap.has(category)) categoryMap.set(category, []);
+    categoryMap.get(category).push(p);
+  }
+
+  return owners;
+}
+
+function buildOwnerFieldValue(categoryMap) {
+  const blocks = [];
+  for (const [category, list] of categoryMap) {
+    const lines = list.map((p) => `- ${p.carModel || "-"} / ${p.plateNumber}`);
+    blocks.push(`**${category}**\n${lines.join("\n")}`);
+  }
+  let value = blocks.join("\n\n");
+  if (value.length > PLATE_FIELD_VALUE_LIMIT) {
+    value = `${value.slice(0, PLATE_FIELD_VALUE_LIMIT - 4)}\n…`;
+  }
+  return value;
+}
 
 function plateListEmbeds(plates, updatedAtText) {
-  const header = `# 🚘 ทะเบียนรถที่ลงทะเบียนไว้\n${PLATE_DIVIDER}`;
-  const footer = `${PLATE_DIVIDER}\n> อัปเดตล่าสุด : ${updatedAtText} | จำนวนทั้งหมด ${plates.length} คัน`;
+  const footerText = `อัปเดตล่าสุด : ${updatedAtText} | จำนวนทั้งหมด ${plates.length} คัน`;
 
-  const lines =
-    plates.length === 0
-      ? ["`ยังไม่มีการลงทะเบียนป้ายทะเบียน`"]
-      : plates.map(
-          (p) => `\`${p.plateNumber}\` — รุ่นรถ: ${p.carModel || "-"} — เจ้าของ/ผู้ขับ: ${p.ownerName}`
-        );
+  if (plates.length === 0) {
+    return [
+      new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle("🚘 ทะเบียนรถที่ลงทะเบียนไว้")
+        .setDescription("`ยังไม่มีการลงทะเบียนป้ายทะเบียน`")
+        .setFooter({ text: footerText }),
+    ];
+  }
 
-  const chunks = [];
-  let current = header;
-  for (const line of lines) {
-    const candidate = `${current}\n${line}`;
-    if (candidate.length > PLATE_CHUNK_LIMIT) {
-      chunks.push(current);
-      current = line;
-    } else {
-      current = candidate;
+  const owners = groupPlatesByOwner(plates);
+  const ownerFields = [];
+  for (const [ownerName, categoryMap] of owners) {
+    ownerFields.push({ name: `• ${ownerName}`, value: buildOwnerFieldValue(categoryMap) });
+  }
+
+  const embedsList = [];
+  let current = new EmbedBuilder().setColor(0x5865f2).setTitle("🚘 ทะเบียนรถที่ลงทะเบียนไว้");
+  let currentChars = 0;
+  let currentFieldCount = 0;
+
+  for (const field of ownerFields) {
+    const fieldChars = field.name.length + field.value.length;
+    if (currentFieldCount >= PLATE_EMBED_FIELDS_LIMIT || currentChars + fieldChars > PLATE_EMBED_CHARS_LIMIT) {
+      embedsList.push(current);
+      current = new EmbedBuilder().setColor(0x5865f2);
+      currentChars = 0;
+      currentFieldCount = 0;
     }
+    current.addFields(field);
+    currentChars += fieldChars;
+    currentFieldCount += 1;
   }
-  chunks.push(current);
+  embedsList.push(current);
 
-  const lastIndex = chunks.length - 1;
-  if (chunks[lastIndex].length + footer.length + 1 <= PLATE_CHUNK_LIMIT) {
-    chunks[lastIndex] += `\n${footer}`;
-  } else {
-    chunks.push(footer);
-  }
+  embedsList[embedsList.length - 1].setFooter({ text: footerText });
 
-  return chunks.slice(0, 10).map((desc) => new EmbedBuilder().setColor(0x5865f2).setDescription(desc));
+  return embedsList.slice(0, 10);
 }
 
 // ---------- ระบบใบสมัคร (สมัครเข้าหน่วยงานผ่านปุ่ม + ห้องผู้อนุมัติ) ----------
