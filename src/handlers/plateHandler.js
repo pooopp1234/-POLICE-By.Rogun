@@ -21,8 +21,10 @@ const CATEGORY_OPTIONS = [
   { label: "เรือ", value: "เรือ", emoji: "🚤" },
 ];
 
-// เก็บชื่อรุ่นรถที่จะ prefill ไว้ชั่วคราว ระหว่างขั้นตอนเลือกประเภท -> เปิดฟอร์ม
-const pendingPrefillModel = new Map();
+const CUSTOM_MODEL_VALUE = "__custom__";
+
+// ค่าเก็บชั่วคราวระหว่างขั้นตอน เลือกประเภท -> เลือกรุ่นรถ -> เปิดฟอร์ม
+const pendingRegistration = new Map();
 
 function categorySelectRow() {
   const select = new StringSelectMenuBuilder()
@@ -32,11 +34,31 @@ function categorySelectRow() {
   return new ActionRowBuilder().addComponents(select);
 }
 
-function plateRegisterModal(prefillModel, category) {
+function modelSelectRow(prefillModel) {
+  // รายชื่อรุ่นรถให้เลือกจาก config (แก้ไข/เพิ่มได้ที่ config.json -> vehicleModelOptions)
+  const configuredModels = Array.isArray(config.vehicleModelOptions) ? config.vehicleModelOptions : [];
+  const modelSet = new Set(configuredModels.filter(Boolean));
+  if (prefillModel) modelSet.add(prefillModel); // ให้รุ่นรถประจำตำแหน่งของผู้ใช้ติดอยู่ในเมนูด้วยเสมอ
+
+  // เมนูเลือกได้สูงสุด 25 ตัวเลือก เผื่อ 1 ช่องไว้ให้ "อื่นๆ (พิมพ์เอง)"
+  const modelOptions = Array.from(modelSet)
+    .slice(0, 24)
+    .map((model) => ({ label: model, value: model, default: model === prefillModel }));
+
+  modelOptions.push({ label: "อื่นๆ (พิมพ์เอง)", value: CUSTOM_MODEL_VALUE, emoji: "✏️" });
+
+  const select = new StringSelectMenuBuilder()
+    .setCustomId("plate_model_select")
+    .setPlaceholder("เลือกรุ่นรถ")
+    .addOptions(modelOptions);
+  return new ActionRowBuilder().addComponents(select);
+}
+
+function plateRegisterModal(category, carModel) {
   const safeCategory = category || "รถ";
-  // เก็บประเภทที่เลือกไว้ใน customId ของโมดัล เพื่อไม่ต้องให้ผู้ใช้พิมพ์ซ้ำ
+  const payload = encodeURIComponent(JSON.stringify({ category: safeCategory, carModel: carModel || undefined }));
   const modal = new ModalBuilder()
-    .setCustomId(`plate_modal_register::${encodeURIComponent(safeCategory)}`)
+    .setCustomId(`plate_modal_register::${payload}`)
     .setTitle(`ลงทะเบียนป้ายทะเบียนรถ (${safeCategory})`);
 
   const plateInput = new TextInputBuilder()
@@ -45,17 +67,19 @@ function plateRegisterModal(prefillModel, category) {
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
 
-  const modelInput = new TextInputBuilder()
-    .setCustomId("carModel")
-    .setLabel("ชื่อรุ่นรถ (เช่น Sultan RS)")
-    .setStyle(TextInputStyle.Short)
-    .setRequired(true);
-  if (prefillModel) modelInput.setValue(prefillModel);
+  const rows = [new ActionRowBuilder().addComponents(plateInput)];
 
-  modal.addComponents(
-    new ActionRowBuilder().addComponents(plateInput),
-    new ActionRowBuilder().addComponents(modelInput)
-  );
+  // ถ้ายังไม่ได้เลือกรุ่นรถจากเมนู (เลือก "อื่นๆ") ให้มีช่องพิมพ์เองในฟอร์ม
+  if (!carModel) {
+    const modelInput = new TextInputBuilder()
+      .setCustomId("carModel")
+      .setLabel("ชื่อรุ่นรถ (เช่น Sultan RS)")
+      .setStyle(TextInputStyle.Short)
+      .setRequired(true);
+    rows.push(new ActionRowBuilder().addComponents(modelInput));
+  }
+
+  modal.addComponents(...rows);
   return modal;
 }
 
@@ -98,11 +122,24 @@ function plateEditModal() {
 
 async function handleRegisterModal(interaction) {
   const plateNumber = interaction.fields.getTextInputValue("plateNumber").trim();
-  const carModel = interaction.fields.getTextInputValue("carModel").trim();
 
-  // ประเภทถูกเลือกไว้แล้วจากเมนู และแนบมากับ customId ของโมดัล เช่น plate_modal_register::รถ
-  const [, encodedCategory] = interaction.customId.split("::");
-  const category = (encodedCategory ? decodeURIComponent(encodedCategory) : "") || "รถ";
+  // ประเภท (และรุ่นรถ ถ้าเลือกจากเมนู) ถูกแนบไว้ใน customId ของโมดัลแล้ว เช่น plate_modal_register::%7B...%7D
+  const [, encodedPayload] = interaction.customId.split("::");
+  let category = "รถ";
+  let carModel = "";
+  if (encodedPayload) {
+    try {
+      const payload = JSON.parse(decodeURIComponent(encodedPayload));
+      category = payload.category || category;
+      carModel = payload.carModel || "";
+    } catch (err) {
+      // เผื่อ payload เสียหาย ใช้ค่าเริ่มต้นแทน
+    }
+  }
+  // ถ้าไม่ได้เลือกรุ่นรถจากเมนู (เลือก "อื่นๆ") จะมีช่องให้พิมพ์เองในฟอร์ม
+  if (!carModel) {
+    carModel = interaction.fields.getTextInputValue("carModel").trim();
+  }
 
   if (!plateNumber || !carModel) {
     return interaction.reply({
@@ -248,8 +285,8 @@ async function handleButton(interaction) {
   if (interaction.customId === "plate_register") {
     const member = await db.findMember(interaction.user.id);
     const prefillModel = member ? config.positionVehicleModels?.[member.position] : undefined;
-    // เก็บชื่อรุ่นรถที่จะ prefill ไว้ชั่วคราว รอจนกว่าจะเลือกประเภทเสร็จ
-    pendingPrefillModel.set(interaction.user.id, prefillModel);
+    // เก็บชื่อรุ่นรถที่จะ prefill ไว้ชั่วคราว รอจนกว่าจะเลือกประเภท+รุ่นรถเสร็จ
+    pendingRegistration.set(interaction.user.id, { prefillModel });
     return interaction.reply({
       content: "🚘 กรุณาเลือกประเภทพาหนะที่จะลงทะเบียนก่อน:",
       components: [categorySelectRow()],
@@ -264,9 +301,19 @@ async function handleButton(interaction) {
 async function handleSelectMenu(interaction) {
   if (interaction.customId === "plate_category_select") {
     const category = interaction.values[0];
-    const prefillModel = pendingPrefillModel.get(interaction.user.id);
-    pendingPrefillModel.delete(interaction.user.id);
-    return interaction.showModal(plateRegisterModal(prefillModel, category));
+    const pending = pendingRegistration.get(interaction.user.id) || {};
+    pendingRegistration.set(interaction.user.id, { ...pending, category });
+    return interaction.update({
+      content: `🚘 ประเภท: **${category}** — ตอนนี้เลือกรุ่นรถ:`,
+      components: [modelSelectRow(pending.prefillModel)],
+    });
+  }
+  if (interaction.customId === "plate_model_select") {
+    const selected = interaction.values[0];
+    const pending = pendingRegistration.get(interaction.user.id) || {};
+    pendingRegistration.delete(interaction.user.id);
+    const carModel = selected === CUSTOM_MODEL_VALUE ? "" : selected;
+    return interaction.showModal(plateRegisterModal(pending.category, carModel));
   }
 }
 

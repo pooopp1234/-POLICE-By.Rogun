@@ -51,5 +51,11 @@
     "เเพทย์ชำนาญการ": "amml_taycan",
     "แพทย์บรรจุ": "amml_taycan",
     "นักเรียนเเพทย์": "pdshabucatcar"
-  }
+  },
+  "vehicleModelOptions": [
+    "McLaren P1",
+    "jestgpr",
+    "amml_taycan",
+    "pdshabucatcar"
+  ]
 }
