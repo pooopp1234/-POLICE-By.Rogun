@@ -16,7 +16,6 @@ const { isAdmin, sendLog } = require("../utils/permissions");
 // ตัวเลือกประเภทพาหนะ ให้เลือกจากเมนูแทนการพิมพ์เอง
 const CATEGORY_OPTIONS = [
   { label: "รถ", value: "รถ", emoji: "🚗" },
-  { label: "มอเตอร์ไซค์", value: "มอเตอร์ไซค์", emoji: "🏍️" },
   { label: "เฮลิคอปเตอร์ (ฮ)", value: "ฮ", emoji: "🚁" },
   { label: "เรือ", value: "เรือ", emoji: "🚤" },
 ];
