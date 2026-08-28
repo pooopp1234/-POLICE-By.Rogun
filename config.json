@@ -28,7 +28,9 @@
     "แพทย์บรรจุ": "1532468585258025092",
     "นักเรียนเเพทย์": "1532468585258025091"
   },
-  "departments": ["แพทย์"],
+  "departments": [
+    "แพทย์"
+  ],
   "positions": [
     "ผู้อำนวย",
     "รองผู้อำนวย",
@@ -40,5 +42,14 @@
     "นักเรียนเเพทย์"
   ],
   "rosterTitle": "📋 รายชื่อแพทย์ 📋",
-  "timezone": "Asia/Bangkok"
+  "timezone": "Asia/Bangkok",
+  "positionVehicleModels": {
+    "ผู้อำนวย": "McLaren P1",
+    "รองผู้อำนวย": "McLaren P1",
+    "หัวหน้าแพทย์": "jestgpr",
+    "แพทย์ชำนาญการพิเศษ": "jestgpr",
+    "เเพทย์ชำนาญการ": "amml_taycan",
+    "แพทย์บรรจุ": "amml_taycan",
+    "นักเรียนเเพทย์": "pdshabucatcar"
+  }
 }

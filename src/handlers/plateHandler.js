@@ -3,9 +3,10 @@ const db = require("../utils/db");
 const time = require("../utils/time");
 const embeds = require("../utils/embeds");
 const platePanel = require("../utils/platePanel");
+const config = require("../../config.json");
 const { isAdmin, sendLog } = require("../utils/permissions");
 
-function plateRegisterModal() {
+function plateRegisterModal(prefillModel) {
   const modal = new ModalBuilder().setCustomId("plate_modal_register").setTitle("ลงทะเบียนป้ายทะเบียนรถ");
 
   const plateInput = new TextInputBuilder()
@@ -19,6 +20,7 @@ function plateRegisterModal() {
     .setLabel("ชื่อรุ่นรถ (เช่น Sultan RS)")
     .setStyle(TextInputStyle.Short)
     .setRequired(true);
+  if (prefillModel) modelInput.setValue(prefillModel);
 
   const categoryInput = new TextInputBuilder()
     .setCustomId("category")
@@ -219,7 +221,9 @@ async function handleEditModal(interaction) {
 
 async function handleButton(interaction) {
   if (interaction.customId === "plate_register") {
-    return interaction.showModal(plateRegisterModal());
+    const member = await db.findMember(interaction.user.id);
+    const prefillModel = member ? config.positionVehicleModels?.[member.position] : undefined;
+    return interaction.showModal(plateRegisterModal(prefillModel));
   }
   if (interaction.customId === "plate_edit") {
     return interaction.showModal(plateEditModal());
