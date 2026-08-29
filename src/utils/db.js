@@ -295,6 +295,15 @@ async function updateMemberPosition(discordId, position) {
   return Number(result.rowsAffected) > 0;
 }
 
+async function updateMemberName(discordId, gameName) {
+  await ready;
+  const result = await client.execute({
+    sql: "UPDATE members SET game_name = ? WHERE discord_id = ?",
+    args: [gameName, discordId],
+  });
+  return Number(result.rowsAffected) > 0;
+}
+
 async function removeMember(discordId) {
   await ready;
   const result = await client.execute({
@@ -1157,6 +1166,7 @@ module.exports = {
   addMember,
   getAllMembers,
   updateMemberPosition,
+  updateMemberName,
   removeMember,
   getDutyLogs,
   findOpenDuty,
