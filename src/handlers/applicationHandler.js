@@ -2,9 +2,16 @@ const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, Messag
 const db = require("../utils/db");
 const time = require("../utils/time");
 const embeds = require("../utils/embeds");
+const steamId = require("../utils/steamId");
 const config = require("../../config.json");
 const { isAdmin, sendLog } = require("../utils/permissions");
 const { setNickname, assignRoles } = require("../utils/discordSync");
+
+/** แปลงลิงก์ Steam ที่กรอกในใบสมัครเป็น Steam Hex สำหรับใส่ในข้อความ log (ไม่ต่อเน็ต รองรับเฉพาะ /profiles/ หรือเลขดิบ) */
+function steamHexOrFallback(steamLink) {
+  const id64 = steamId.extractSteamId64(steamLink);
+  return id64 ? `\`${steamId.steamId64ToHex(id64)}\`` : "ไม่พบ (ใช้ลิงก์ /profiles/ หรือเลข SteamID64)";
+}
 
 function applicationModal(department) {
   const modal = new ModalBuilder()
@@ -166,6 +173,7 @@ async function handleModalSubmit(interaction) {
       { name: "เบอร์ในเมือง", value: phone, inline: true },
       { name: "ชื่อผู้คุมสอบ", value: examinerName, inline: true },
       { name: "ลิงค์ Steam", value: steamLink, inline: true },
+      { name: "Steam Hex", value: steamHexOrFallback(steamLink), inline: true },
     ])
   );
 
@@ -256,6 +264,7 @@ async function handleDecision(interaction) {
     { name: "เบอร์ในเมือง", value: application.phone, inline: true },
     { name: "ชื่อผู้คุมสอบ", value: application.examinerName, inline: true },
     { name: "ลิงค์ Steam", value: application.steamLink, inline: true },
+    { name: "Steam Hex", value: steamHexOrFallback(application.steamLink), inline: true },
   ];
 
   if (roleResult) {

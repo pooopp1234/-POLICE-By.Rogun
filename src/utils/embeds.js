@@ -1,6 +1,14 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 const config = require("../../config.json");
 const time = require("./time");
+const steamId = require("./steamId");
+
+/** แปลงลิงก์/เลข Steam ที่กรอกในใบสมัครเป็น Steam Hex แบบไม่ต้องต่อเน็ต (รองรับเฉพาะ /profiles/ หรือเลขดิบ) */
+function steamHexFromLink(steamLink) {
+  const id64 = steamId.extractSteamId64(steamLink);
+  if (!id64) return null;
+  return steamId.steamId64ToHex(id64);
+}
 
 function registerEmbed({ discordName, gameName, position, addedBy }) {
   const embed = new EmbedBuilder()
@@ -455,6 +463,7 @@ function applicationMenuRow(departments) {
 function applicationReviewEmbed(app, reviewerTag) {
   const isPending = app.status === "รอตรวจสอบ";
   const approved = app.status === "อนุมัติ";
+  const steamHex = steamHexFromLink(app.steamLink);
 
   const embed = new EmbedBuilder()
     .setColor(isPending ? 0xfee75c : approved ? 0x57f287 : 0xed4245)
@@ -466,6 +475,7 @@ function applicationReviewEmbed(app, reviewerTag) {
       { name: "เบอร์ในเมือง", value: app.phone || "-", inline: true },
       { name: "ชื่อผู้คุมสอบ", value: app.examinerName || "-", inline: true },
       { name: "ลิงค์ Steam", value: app.steamLink || "-", inline: true },
+      { name: "Steam Hex", value: steamHex ? `\`${steamHex}\`` : "ไม่พบ (ใช้ลิงก์ /profiles/ หรือเลข SteamID64)", inline: true },
       { name: "Discord", value: app.discordId, inline: true }
     )
     .setFooter({ text: `Application #${app.id}` })
