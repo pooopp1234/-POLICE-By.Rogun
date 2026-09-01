@@ -29,8 +29,6 @@ module.exports = {
       .addFields(
         { name: "Steam Hex (FiveM)", value: `\`${result.hex}\``, inline: false },
         { name: "SteamID64", value: `\`${result.steamId64}\``, inline: true },
-        { name: "SteamID2", value: `\`${result.steamId2}\``, inline: true },
-        { name: "SteamID3", value: `\`${result.steamId3}\``, inline: true },
         { name: "ลิงก์โปรไฟล์", value: result.profileUrl, inline: false }
       )
       .setTimestamp();

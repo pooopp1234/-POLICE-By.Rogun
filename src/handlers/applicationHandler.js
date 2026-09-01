@@ -7,10 +7,9 @@ const config = require("../../config.json");
 const { isAdmin, sendLog } = require("../utils/permissions");
 const { setNickname, assignRoles } = require("../utils/discordSync");
 
-/** แปลงลิงก์ Steam ที่กรอกในใบสมัครเป็น Steam Hex สำหรับใส่ในข้อความ log (ไม่ต่อเน็ต รองรับเฉพาะ /profiles/ หรือเลขดิบ) */
-function steamHexOrFallback(steamLink) {
-  const id64 = steamId.extractSteamId64(steamLink);
-  return id64 ? `\`${steamId.steamId64ToHex(id64)}\`` : "ไม่พบ (ใช้ลิงก์ /profiles/ หรือเลข SteamID64)";
+/** จัดรูปแบบ Steam Hex ที่คำนวณ/เก็บไว้แล้วให้อยู่ในโค้ดบล็อก หรือข้อความแจ้งถ้ายังไม่มีค่า */
+function formatSteamHex(steamHex) {
+  return steamHex ? `\`${steamHex}\`` : "ไม่พบ (ตรวจสอบลิงก์ Steam อีกครั้ง)";
 }
 
 function applicationModal(department) {
@@ -120,6 +119,11 @@ async function handleModalSubmit(interaction) {
     });
   }
 
+  // แปลงลิงก์ Steam ที่กรอกเป็น Steam Hex ให้อัตโนมัติ (รองรับทั้งลิงก์ /profiles/ และลิงก์ vanity /id/)
+  // ถ้าแปลงไม่สำเร็จ (เช่น ลิงก์ผิดรูปแบบ) จะไม่ทำให้การสมัครล้มเหลว แค่เว้นค่า Steam Hex ไว้ให้แอดมินเช็คเอง
+  const steamHexResult = await steamId.resolveSteamId64(steamLink);
+  const steamHex = steamHexResult.ok ? steamId.steamId64ToHex(steamHexResult.steamId64) : null;
+
   const application = await db.addApplication({
     discordId: interaction.user.id,
     discordName: interaction.user.tag,
@@ -129,6 +133,7 @@ async function handleModalSubmit(interaction) {
     phone,
     examinerName,
     steamLink,
+    steamHex,
     createdAt: time.nowIso(),
   });
 
@@ -173,7 +178,7 @@ async function handleModalSubmit(interaction) {
       { name: "เบอร์ในเมือง", value: phone, inline: true },
       { name: "ชื่อผู้คุมสอบ", value: examinerName, inline: true },
       { name: "ลิงค์ Steam", value: steamLink, inline: true },
-      { name: "Steam Hex", value: steamHexOrFallback(steamLink), inline: true },
+      { name: "Steam Hex", value: formatSteamHex(steamHex), inline: true },
     ])
   );
 
@@ -264,7 +269,7 @@ async function handleDecision(interaction) {
     { name: "เบอร์ในเมือง", value: application.phone, inline: true },
     { name: "ชื่อผู้คุมสอบ", value: application.examinerName, inline: true },
     { name: "ลิงค์ Steam", value: application.steamLink, inline: true },
-    { name: "Steam Hex", value: steamHexOrFallback(application.steamLink), inline: true },
+    { name: "Steam Hex", value: formatSteamHex(application.steamHex), inline: true },
   ];
 
   if (roleResult) {
